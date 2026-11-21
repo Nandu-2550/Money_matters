@@ -20,6 +20,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
+import { findMatchingProfile } from '../lib/supabaseClient';
 import QRScannerModal from './QRScannerModal';
 import ReceiveQRModal from './ReceiveQRModal';
 import DemoPinModal from './DemoPinModal';
@@ -173,18 +174,11 @@ export default function ScannerSimulator() {
     const cleanUpi = counterparty.trim().toLowerCase();
     const cleanDigits = cleanUpi.replace(/\D/g, '');
 
-    // Allow standard UPI format (@), 10-digit mobile, registered profile, or presets
-    const isProfileMatch = profiles.some(p => {
-      const pUpi = (p.upiId || '').toLowerCase();
-      const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
-      const pEmail = (p.email || '').toLowerCase();
-      const pPhone = (p.phone || '').replace(/\D/g, '');
-      if (pUpi === cleanUpi || pWallet === cleanUpi || pEmail === cleanUpi) return true;
-      if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
-      return false;
-    });
+    // Allow standard UPI format (@), 10-digit mobile, registered profile, or handle prefix
+    const matchedRecipient = findMatchingProfile(counterparty, profiles);
+    const isProfileMatch = Boolean(matchedRecipient);
 
-    const isFormatValid = cleanUpi.includes('@') || cleanDigits.length === 10 || isProfileMatch || cleanUpi.length > 2;
+    const isFormatValid = cleanUpi.includes('@') || cleanDigits.length === 10 || isProfileMatch || cleanUpi.length >= 3;
     if (!isFormatValid) {
       setFormError(
         language === 'kn'
@@ -206,16 +200,7 @@ export default function ScannerSimulator() {
       }
     }
 
-    const recipient = profiles.find(p => {
-      const pUpi = (p.upiId || '').toLowerCase();
-      const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
-      const pEmail = (p.email || '').toLowerCase();
-      const pPhone = (p.phone || '').replace(/\D/g, '');
-      if (pUpi === cleanUpi || pWallet === cleanUpi || pEmail === cleanUpi) return true;
-      if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
-      return false;
-    });
-    const payeeName = recipient ? recipient.fullName : counterparty.trim();
+    const payeeName = matchedRecipient ? matchedRecipient.fullName : counterparty.trim();
 
     setPendingTransfer({
       direction,

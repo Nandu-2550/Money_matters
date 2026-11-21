@@ -3,7 +3,8 @@ import {
   storageService, 
   DEFAULT_PROFILES, 
   supabase, 
-  isSupabaseConfigured 
+  isSupabaseConfigured,
+  findMatchingProfile
 } from '../lib/supabaseClient';
 import { scoreTransaction } from '../utils/fraudEngine';
 import { translations } from '../utils/translations';
@@ -568,18 +569,8 @@ export function WalletProvider({ children }) {
       createdAt: new Date(voucher.timestamp).toISOString()
     };
 
-    // 2. Identify sender profile if present locally (resilient match: walletId, upiId, email, phone)
-    const cleanFrom = (voucher.from_wallet || '').trim().toLowerCase();
-    const fromDigits = cleanFrom.replace(/\D/g, '');
-    const senderProfile = profiles.find(p => {
-      const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
-      const pUpi = (p.upiId || '').toLowerCase();
-      const pEmail = (p.email || '').toLowerCase();
-      const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
-      if (pWallet === cleanFrom || pUpi === cleanFrom || pEmail === cleanFrom) return true;
-      if (fromDigits.length >= 10 && pPhoneDigits.endsWith(fromDigits.slice(-10))) return true;
-      return false;
-    });
+    // 2. Identify sender profile if present locally (resilient multi-field matcher)
+    const senderProfile = findMatchingProfile(voucher.from_wallet, profiles);
 
     // 3. Sender Mirror Debit Transaction (OUT)
     const senderTx = {
@@ -725,24 +716,13 @@ export function WalletProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
-    setTransactions(prev => [newTx, ...prev]);
-    await storageService.saveNewTransaction(newTx);
+    // 1. Immediately update active user's local state and persistent storage (<10ms)
+    setTransactions(prev => [newTx, ...prev.filter(t => t.id !== newTx.id)]);
+    storageService.saveNewTransaction(newTx);
 
-    // Two-Way P2P Transfer Sync (Mirror Credit for Recipient)
+    // 2. Two-Way P2P Transfer Sync (Mirror Credit for Recipient)
     if (newTx.direction === 'OUT' && newTx.status === 'VERIFIED') {
-      const cleanTarget = newTx.counterparty.trim().toLowerCase();
-      const targetDigits = cleanTarget.replace(/\D/g, '');
-
-      const recipientProfile = profiles.find(p => {
-        const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
-        const pUpi = (p.upiId || '').toLowerCase();
-        const pEmail = (p.email || '').toLowerCase();
-        const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
-
-        if (pWallet === cleanTarget || pUpi === cleanTarget || pEmail === cleanTarget) return true;
-        if (targetDigits.length >= 10 && pPhoneDigits.endsWith(targetDigits.slice(-10))) return true;
-        return false;
-      });
+      const recipientProfile = findMatchingProfile(newTx.counterparty, profiles);
 
       const mirrorCreditTx = {
         id: `tx_p2p_in_${sharedTxId}`,
@@ -766,19 +746,18 @@ export function WalletProvider({ children }) {
         createdAt: new Date().toISOString()
       };
 
+      // Always save mirror credit to recipient's local account storage immediately
       if (recipientProfile) {
-        await storageService.saveNewTransaction(mirrorCreditTx);
+        storageService.saveNewTransaction(mirrorCreditTx);
       }
 
-      // If Online: Upsert both to Supabase cloud
+      // Background cloud sync (non-blocking so UI remains lightning-fast)
       if (isOnline) {
-        try {
-          await storageService.syncOfflineTransactionPair(newTx, mirrorCreditTx);
-        } catch (err) {
-          console.warn('[Sync] Failed online dual-settlement, queuing outbox:', err);
+        storageService.syncOfflineTransactionPair(newTx, mirrorCreditTx).catch(err => {
+          console.warn('[Sync] Failed background dual-settlement, queuing outbox:', err);
           queueOfflineTransactionPair(newTx, mirrorCreditTx);
           setOfflineOutboxCount(getOfflineOutbox().length);
-        }
+        });
       } else {
         // If Offline: Queue in outbox
         queueOfflineTransactionPair(newTx, mirrorCreditTx);
@@ -817,23 +796,11 @@ export function WalletProvider({ children }) {
         return tx;
       })
     );
-    await storageService.updateTransactionStatus(currentUser.id, id, 'VERIFIED');
+    storageService.updateTransactionStatus(currentUser.id, id, 'VERIFIED');
 
     if (approvedTx && approvedTx.direction === 'OUT') {
       const myWallet = currentUser.walletId || currentUser.upiId;
-      const cleanTarget = approvedTx.counterparty.trim().toLowerCase();
-      const targetDigits = cleanTarget.replace(/\D/g, '');
-
-      const recipientProfile = profiles.find(p => {
-        const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
-        const pUpi = (p.upiId || '').toLowerCase();
-        const pEmail = (p.email || '').toLowerCase();
-        const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
-
-        if (pWallet === cleanTarget || pUpi === cleanTarget || pEmail === cleanTarget) return true;
-        if (targetDigits.length >= 10 && pPhoneDigits.endsWith(targetDigits.slice(-10))) return true;
-        return false;
-      });
+      const recipientProfile = findMatchingProfile(approvedTx.counterparty, profiles);
 
       if (recipientProfile) {
         const mirrorCreditTx = {
@@ -855,14 +822,12 @@ export function WalletProvider({ children }) {
           isCollectRequest: false,
           createdAt: new Date().toISOString()
         };
-        await storageService.saveNewTransaction(mirrorCreditTx);
+        storageService.saveNewTransaction(mirrorCreditTx);
 
         if (isOnline) {
-          try {
-            await storageService.syncOfflineTransactionPair(approvedTx, mirrorCreditTx);
-          } catch (err) {
-            console.warn('[Sync] Failed online sync for approved transaction:', err);
-          }
+          storageService.syncOfflineTransactionPair(approvedTx, mirrorCreditTx).catch(err => {
+            console.warn('[Sync] Failed background online sync for approved transaction:', err);
+          });
         }
       }
     }

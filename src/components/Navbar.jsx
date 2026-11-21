@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   ShieldCheck, 
   Download, 
   Languages, 
   Clock, 
   BarChart3, 
-  ChevronDown,
-  RefreshCw,
-  Plus
+  ChevronDown
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
@@ -22,23 +20,10 @@ export default function Navbar() {
     computedMetrics, 
     promptInstall, 
     isInstalled, 
-    setIsProfileModalOpen,
-    isOnline,
-    offlineOutboxCount,
-    syncOfflineOutbox,
-    setIsTopUpModalOpen
+    setIsProfileModalOpen
   } = useWallet();
 
-  const [isSyncing, setIsSyncing] = useState(false);
   const heldCount = computedMetrics.heldTransactions.length;
-
-  const handleManualSync = async (e) => {
-    e.stopPropagation();
-    if (!isOnline) return;
-    setIsSyncing(true);
-    await syncOfflineOutbox();
-    setIsSyncing(false);
-  };
 
   return (
     <>
@@ -47,7 +32,7 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-3">
             
-            {/* Left: App Brand Logo + PhonePe-Style Profile Button + Status Pill */}
+            {/* Left: App Brand Logo + Profile Button */}
             <div className="flex items-center gap-2 sm:gap-3">
               {/* Brand Logo */}
               <div className="flex items-center gap-2 pr-2 border-r border-slate-800">
@@ -83,43 +68,6 @@ export default function Navbar() {
                   </span>
                 </div>
               </button>
-
-              {/* Online / Offline Sync Status Badge */}
-              <div className="flex items-center gap-1.5">
-                <div 
-                  className={`flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-semibold border ${
-                    isOnline 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  }`}
-                  title={isOnline ? 'Connected to cloud' : 'Operating offline with signed vouchers'}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                  <span className="hidden sm:inline">
-                    {isOnline ? (language === 'kn' ? 'ಆನ್‌ಲೈನ್' : 'Online') : (language === 'kn' ? 'ಆಫ್‌ಲೈನ್' : 'Offline')}
-                  </span>
-                </div>
-
-                {/* Pending Offline Sync Badge */}
-                {offlineOutboxCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleManualSync}
-                    disabled={!isOnline || isSyncing}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-bold border transition ${
-                      isOnline
-                        ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25 cursor-pointer'
-                        : 'bg-slate-800/80 border-slate-700 text-slate-400 cursor-not-allowed'
-                    }`}
-                    title={isOnline ? 'Click to sync pending transactions now' : 'Will sync automatically when back online'}
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-400' : ''}`} />
-                    <span>
-                      {offlineOutboxCount} {language === 'kn' ? 'ಬಾಕಿ' : 'Queued'}
-                    </span>
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Desktop Navigation Tabs */}
@@ -168,20 +116,6 @@ export default function Navbar() {
 
             {/* Right Utility Actions */}
             <div className="flex items-center gap-2">
-              
-              {/* Quick Add Money Button */}
-              <button
-                type="button"
-                onClick={() => setIsTopUpModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition cursor-pointer"
-                title={language === 'kn' ? 'ವಾಲೆಟ್‌ಗೆ ಹಣ ಸೇರಿಸಿ' : 'Top-Up Safe Wallet from Bank'}
-              >
-                <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">
-                  {language === 'kn' ? 'ಹಣ ಸೇರಿಸಿ' : 'Add Money'}
-                </span>
-              </button>
-
               {/* Install PWA Button */}
               {!isInstalled && (
                 <button
