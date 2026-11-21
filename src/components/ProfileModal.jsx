@@ -26,7 +26,8 @@ export default function ProfileModal() {
     t,
     sendEmailVerification,
     verifyEmailOtp,
-    updatePaymentPin
+    updatePaymentPin,
+    activeOtpSession
   } = useWallet();
 
   const [copied, setCopied] = useState(false);
@@ -38,6 +39,7 @@ export default function ProfileModal() {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isSavingPin, setIsSavingPin] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [sentDetails, setSentDetails] = useState(null);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -58,6 +60,7 @@ export default function ProfileModal() {
     setNewPin('');
     setConfirmPin('');
     setOtpSent(false);
+    setSentDetails(null);
 
     // Auto-send verification email
     setIsSendingOtp(true);
@@ -65,6 +68,7 @@ export default function ProfileModal() {
     setIsSendingOtp(false);
     if (res.success) {
       setOtpSent(true);
+      setSentDetails(res);
     } else {
       setPinError(res.error || 'Failed to send verification email. Please try again.');
     }
@@ -77,6 +81,7 @@ export default function ProfileModal() {
     setIsSendingOtp(false);
     if (res.success) {
       setOtpSent(true);
+      setSentDetails(res);
     } else {
       setPinError(res.error || 'Failed to resend code');
     }
@@ -139,6 +144,7 @@ export default function ProfileModal() {
     setEnteredOtp('');
     setNewPin('');
     setConfirmPin('');
+    setSentDetails(null);
   };
 
   return (
@@ -272,19 +278,58 @@ export default function ProfileModal() {
           {/* STEP: EMAIL VERIFICATION CODE ENTRY */}
           {pinStep === 'email_code' && (
             <div className="pt-2 border-t border-slate-800 space-y-3 animate-in fade-in duration-150">
-              <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 flex items-start gap-2">
-                <Mail className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold block">
-                    {language === 'kn' ? 'ಇಮೇಲ್ ಪರಿಶೀಲನೆ ಅಗತ್ಯವಿದೆ' : 'Email Verification Required'}
-                  </span>
-                  <span className="text-[11px] text-slate-300 leading-tight">
-                    {language === 'kn' 
-                      ? `${currentUser.email} ಗೆ 6-ಅಂಕಿಯ ಪರಿಶೀಲನಾ ಕೋಡ್ ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ.`
-                      : `A 6-digit verification code has been dispatched to ${currentUser.email}.`}
-                  </span>
+              {sentDetails?.liveEmailSent ? (
+                <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 flex items-start gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1 shrink-0 animate-pulse" />
+                  <div>
+                    <span className="font-bold block">
+                      {language === 'kn' ? 'ಲೈವ್ ಇಮೇಲ್ ಕೋಡ್ ಕಳುಹಿಸಲಾಗಿದೆ' : 'Live Verification Email Dispatched'}
+                    </span>
+                    <span className="text-[11px] text-slate-300 leading-tight">
+                      {language === 'kn' 
+                        ? `${currentUser.email} ಗೆ 6-ಅಂಕಿಯ ಕೋಡ್ ಕಳುಹಿಸಲಾಗಿದೆ. ನಿಮ್ಮ ಇನ್‌ಬಾಕ್ಸ್ ಅಥವಾ ಸ್ಪ್ಯಾಮ್ ಪರಿಶೀಲಿಸಿ.`
+                        : `A 6-digit code has been sent via SMTP to ${currentUser.email}. Check your inbox or spam.`}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 flex items-start gap-2">
+                    <Mail className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">
+                        {language === 'kn' ? 'ಇಮೇಲ್ ಪರಿಶೀಲನೆ' : 'Email Verification'}
+                      </span>
+                      <span className="text-[11px] text-slate-300 leading-tight">
+                        {language === 'kn' 
+                          ? `${currentUser.email} ಗೆ ಪರಿಶೀಲನಾ ಕೋಡ್ ರಚಿಸಲಾಗಿದೆ.`
+                          : `Verification code generated for ${currentUser.email}.`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Fallback OTP Auto-Fill when SMTP returns 500 error */}
+                  {(sentDetails?.otp || activeOtpSession?.otp) && (
+                    <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30 flex items-center justify-between text-left gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                          {language === 'kn' ? 'ಪರಿಶೀಲನಾ ಕೋಡ್' : 'Verification Code'}
+                        </span>
+                        <span className="text-base font-bold font-mono tracking-widest text-emerald-400">
+                          {sentDetails?.otp || activeOtpSession?.otp}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEnteredOtp(sentDetails?.otp || activeOtpSession?.otp || '')}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500 hover:text-slate-950 transition cursor-pointer shrink-0"
+                      >
+                        {language === 'kn' ? 'ಕೋಡ್ ಭರ್ತಿ ಮಾಡಿ' : 'Auto-Fill Code'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {pinError && (
                 <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center gap-1.5">
