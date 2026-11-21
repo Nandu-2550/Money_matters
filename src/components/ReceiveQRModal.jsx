@@ -20,10 +20,11 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
 
   if (!isOpen || !currentUser) return null;
 
-  const upiUri = `upi://pay?pa=${currentUser.upiId}&pn=${encodeURIComponent(currentUser.fullName)}&cu=INR`;
+  const activeWalletId = currentUser.walletId || currentUser.wallet_id || currentUser.upiId;
+  const walletUri = `mmwallet://pay?pa=${activeWalletId}&pn=${encodeURIComponent(currentUser.fullName)}&cu=INR`;
 
-  const copyUpi = () => {
-    navigator.clipboard.writeText(currentUser.upiId);
+  const copyWalletId = () => {
+    navigator.clipboard.writeText(activeWalletId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -34,7 +35,7 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
     const url = canvas.toDataURL('image/png');
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${currentUser.fullName.replace(/\s+/g, '_')}_UPI_QR.png`;
+    a.download = `${currentUser.fullName.replace(/\s+/g, '_')}_Wallet_QR.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -85,32 +86,32 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
         {/* QR Code Canvas Box */}
         <div className="bg-white p-4 rounded-3xl shadow-lg flex flex-col items-center justify-center mx-auto w-fit" ref={qrRef}>
           <QRCodeCanvas
-            value={upiUri}
+            value={walletUri}
             size={210}
             level="H"
             includeMargin={true}
           />
           <div className="text-center mt-1">
             <span className="text-[10px] text-slate-700 font-mono font-bold tracking-tight">
-              {currentUser.upiId}
+              {activeWalletId}
             </span>
           </div>
         </div>
 
-        {/* 1-Click Copy UPI ID pill */}
+        {/* 1-Click Copy Wallet ID pill */}
         <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-2">
           <div className="truncate">
             <span className="text-[10px] text-slate-500 block uppercase tracking-wider font-semibold">
-              UPI ID
+              Safe-Wallet ID
             </span>
             <span className="text-xs font-mono font-medium text-emerald-400 truncate block">
-              {currentUser.upiId}
+              {activeWalletId}
             </span>
           </div>
 
           <button
             type="button"
-            onClick={copyUpi}
+            onClick={copyWalletId}
             className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-200 transition shrink-0 cursor-pointer"
           >
             {copied ? (

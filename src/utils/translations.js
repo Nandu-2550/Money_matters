@@ -85,12 +85,13 @@ export const translations = {
       toMobile: "To Mobile / UPI",
       receiveQr: "Receive / QR",
       checkBalance: "Check Balance",
+      topUp: "Add Money",
       linkScanner: "Scam Scanner",
       contactsTitle: "Money Matters Contacts",
       quickP2PTitle: "Quick Family Transfer",
       sendToContact: "Send to {name} ({upi})",
-      qrModalTitle: "My UPI QR Code",
-      qrModalDesc: "Scan to receive payment directly into your simulated wallet",
+      qrModalTitle: "My Safe-Wallet QR",
+      qrModalDesc: "Scan to receive payment directly into your simulated safe wallet",
       scannerModalTitle: "Scam & Link Quick Scanner",
       scannerModalDesc: "Paste any suspicious SMS, Telegram link, or WhatsApp stock tip to analyze risk"
     },
@@ -206,6 +207,7 @@ export const translations = {
       Business: "Business & Sales",
       Transfer: "Friends & Family",
       Emergency: "Emergency",
+      TOPUP: "Wallet Top-Up",
       Other: "General"
     },
     riskLevels: {
@@ -306,11 +308,12 @@ export const translations = {
       toMobile: "ಮೊಬೈಲ್ / UPI ಗೆ",
       receiveQr: "ಸ್ವೀಕರಿಸಿ / QR",
       checkBalance: "ಬ್ಯಾಲೆನ್ಸ್ ಚೆಕ್",
+      topUp: "ಹಣ ಸೇರಿಸಿ",
       linkScanner: "ಸ್ಕ್ಯಾಮ್ ಸ್ಕ್ಯಾನರ್",
       contactsTitle: "ಮನಿ ಮ್ಯಾಟರ್ಸ್ ಸಂಪರ್ಕಗಳು",
       quickP2PTitle: "ತ್ವರಿತ ಕುಟುಂಬ ವರ್ಗಾವಣೆ",
       sendToContact: "{name} ಗೆ ಹಣ ಕಳುಹಿಸಿ ({upi})",
-      qrModalTitle: "ನನ್ನ UPI QR ಕೋಡ್",
+      qrModalTitle: "ನನ್ನ ವಾಲೆಟ್ QR ಕೋಡ್",
       qrModalDesc: "ನಿಮ್ಮ ವಾಲೆಟ್‌ಗೆ ನೇರವಾಗಿ ಹಣ ಪಡೆಯಲು ಈ QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ",
       scannerModalTitle: "ವಂಚನೆಯ ಲಿಂಕ್ ಸ್ಕ್ಯಾನರ್",
       scannerModalDesc: "ಯಾವುದೇ ಶಂಕಿತ SMS, ಟೆಲಿಗ್ರಾಂ ಲಿಂಕ್ ಅಥವಾ ವಾಟ್ಸಾಪ್ ಟಿಪ್ಸ್ ನಕಲಿಸಿ ಪರೀಕ್ಷಿಸಿ"
@@ -427,6 +430,7 @@ export const translations = {
       Business: "ವ್ಯಾಪಾರ",
       Transfer: "ಸ್ನೇಹಿತರು & ಕುಟುಂಬ",
       Emergency: "ತುರ್ತು",
+      TOPUP: "ವಾಲೆಟ್ ಟಾಪ್-ಅಪ್",
       Other: "ಸಾಮಾನ್ಯ"
     },
     riskLevels: {

@@ -9,7 +9,11 @@ import {
   X,
   CreditCard,
   User,
-  ChevronDown
+  ChevronDown,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Plus
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
@@ -25,11 +29,24 @@ export default function Navbar() {
     promptInstall, 
     isInstalled, 
     resetDemoData, 
-    setIsProfileModalOpen 
+    setIsProfileModalOpen,
+    isOnline,
+    offlineOutboxCount,
+    syncOfflineOutbox,
+    setIsTopUpModalOpen
   } = useWallet();
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const heldCount = computedMetrics.heldTransactions.length;
+
+  const handleManualSync = async (e) => {
+    e.stopPropagation();
+    if (!isOnline) return;
+    setIsSyncing(true);
+    await syncOfflineOutbox();
+    setIsSyncing(false);
+  };
 
   return (
     <>
@@ -75,8 +92,8 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-3">
             
-            {/* Left: PhonePe-Style Profile Button */}
-            <div className="flex items-center gap-3">
+            {/* Left: PhonePe-Style Profile Button + Online Status Pill */}
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}
@@ -86,7 +103,7 @@ export default function Navbar() {
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-slate-950 font-black text-sm flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
                   {currentUser?.avatarInitials || 'U'}
                 </div>
-                <div className="hidden min-[400px]:block">
+                <div className="hidden min-[440px]:block">
                   <div className="flex items-center gap-1">
                     <span className="text-xs font-bold text-white leading-tight">
                       {currentUser?.fullName}
@@ -94,10 +111,47 @@ export default function Navbar() {
                     <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition" />
                   </div>
                   <span className="text-[10px] text-slate-400 block font-mono leading-none">
-                    {currentUser?.upiId}
+                    {currentUser?.walletId || currentUser?.upiId}
                   </span>
                 </div>
               </button>
+
+              {/* Online / Offline Sync Status Badge */}
+              <div className="flex items-center gap-1.5">
+                <div 
+                  className={`flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-semibold border ${
+                    isOnline 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  }`}
+                  title={isOnline ? 'Connected to cloud' : 'Operating offline with signed vouchers'}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className="hidden sm:inline">
+                    {isOnline ? (language === 'kn' ? 'ಆನ್‌ಲೈನ್' : 'Online') : (language === 'kn' ? 'ಆಫ್‌ಲೈನ್' : 'Offline')}
+                  </span>
+                </div>
+
+                {/* Pending Offline Sync Badge */}
+                {offlineOutboxCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleManualSync}
+                    disabled={!isOnline || isSyncing}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-bold border transition ${
+                      isOnline
+                        ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25 cursor-pointer'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-400 cursor-not-allowed'
+                    }`}
+                    title={isOnline ? 'Click to sync pending transactions now' : 'Will sync automatically when back online'}
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-400' : ''}`} />
+                    <span>
+                      {offlineOutboxCount} {language === 'kn' ? 'ಬಾಕಿ' : 'Queued'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Desktop Navigation Tabs */}
@@ -147,23 +201,38 @@ export default function Navbar() {
             {/* Right Utility Actions */}
             <div className="flex items-center gap-2">
               
-              {/* Wallet Balance Card */}
-              <div 
-                onClick={() => setActiveTab('dashboard')}
-                className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5 flex items-center gap-2 transition"
-                title="Wallet Balance"
-              >
-                <div className="w-6 h-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                  <CreditCard className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-medium text-slate-400">
-                    {t.currentBalanceLabel}
+              {/* Standalone Safe-Wallet Balance Card + Quick Add Money */}
+              <div className="flex items-center gap-1">
+                <div 
+                  onClick={() => setActiveTab('dashboard')}
+                  className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5 flex items-center gap-2 transition"
+                  title="Safe-Wallet Balance"
+                >
+                  <div className="w-6 h-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <CreditCard className="w-3.5 h-3.5" />
                   </div>
-                  <div className="text-xs sm:text-sm font-bold text-slate-100">
-                    ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}
+                  <div>
+                    <div className="text-[10px] font-medium text-slate-400">
+                      {t.currentBalanceLabel}
+                    </div>
+                    <div className="text-xs sm:text-sm font-bold text-slate-100">
+                      ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}
+                    </div>
                   </div>
                 </div>
+
+                {/* Quick Add Money Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsTopUpModalOpen(true)}
+                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Top-Up Safe Wallet from Bank"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">
+                    {language === 'kn' ? 'ಹಣ ಸೇರಿಸಿ' : 'Top-Up'}
+                  </span>
+                </button>
               </div>
 
               {/* Install PWA Button */}

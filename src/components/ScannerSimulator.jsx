@@ -25,6 +25,8 @@ import { useWallet } from '../context/WalletContext';
 import QRScannerModal from './QRScannerModal';
 import ReceiveQRModal from './ReceiveQRModal';
 import DemoPinModal from './DemoPinModal';
+import TopUpModal from './TopUpModal';
+import OfflineVoucherModal from './OfflineVoucherModal';
 
 export default function ScannerSimulator() {
   const { 
@@ -34,7 +36,12 @@ export default function ScannerSimulator() {
     language, 
     t, 
     submitTransaction, 
-    setActiveTab 
+    setActiveTab,
+    isOnline,
+    topUpWallet,
+    claimOfflineVoucher,
+    isTopUpModalOpen,
+    setIsTopUpModalOpen
   } = useWallet();
 
   // Form State
@@ -52,6 +59,8 @@ export default function ScannerSimulator() {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showReceiveQR, setShowReceiveQR] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [activeVoucher, setActiveVoucher] = useState(null);
   const [pinModalMode, setPinModalMode] = useState('transfer'); // 'transfer' | 'balance'
   const [pendingTransfer, setPendingTransfer] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -230,15 +239,20 @@ export default function ScannerSimulator() {
     setIsScanning(false);
 
     if (result.status === 'VERIFIED') {
-      setSuccessData({
-        amount: pendingTransfer.amount,
-        payeeName: pendingTransfer.payeeName,
-        counterparty: pendingTransfer.counterparty,
-        txId: `UPI-MM-${Date.now().toString().slice(-8)}`,
-        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }),
-        bank: `${currentUser.bankName} •••• ${currentUser.accountLast4}`
-      });
-      setShowSuccessModal(true);
+      if (!isOnline && result.offlineVoucher) {
+        setActiveVoucher(result.offlineVoucher);
+        setShowVoucherModal(true);
+      } else {
+        setSuccessData({
+          amount: pendingTransfer.amount,
+          payeeName: pendingTransfer.payeeName,
+          counterparty: pendingTransfer.counterparty,
+          txId: result.txId || `MM-TX-${Date.now().toString().slice(-8)}`,
+          date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }),
+          bank: `Safe Wallet • Closed-Loop`
+        });
+        setShowSuccessModal(true);
+      }
       setCounterparty('');
       setAmount('');
       setMessage('');
@@ -255,18 +269,18 @@ export default function ScannerSimulator() {
       
       {/* 1. PhonePe-Style 4-Icon Action Bar */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
-        <div className="grid grid-cols-4 gap-2 sm:gap-4 text-center">
+        <div className="grid grid-cols-5 gap-1.5 sm:gap-3 text-center">
           
           {/* 1. Scan Any QR */}
           <button
             type="button"
             onClick={handleActionScanQR}
-            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <QrCode className="w-5 h-5" />
             </div>
-            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.scanQr || 'Scan Any QR'}
             </span>
           </button>
@@ -275,40 +289,54 @@ export default function ScannerSimulator() {
           <button
             type="button"
             onClick={handleActionToMobile}
-            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <Smartphone className="w-5 h-5" />
             </div>
-            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.toMobile}
             </span>
           </button>
 
-          {/* 3. Check Bank Balance */}
+          {/* 3. Top-Up Safe Wallet */}
+          <button
+            type="button"
+            onClick={() => setIsTopUpModalOpen(true)}
+            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {language === 'kn' ? 'ಹಣ ಸೇರಿಸಿ' : 'Add Money'}
+            </span>
+          </button>
+
+          {/* 4. Check Bank Balance */}
           <button
             type="button"
             onClick={handleActionCheckBalance}
-            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
-              <CreditCard className="w-5 h-5" />
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <Lock className="w-5 h-5" />
             </div>
-            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.checkBalance}
             </span>
           </button>
 
-          {/* 4. Receive Money / QR */}
+          {/* 5. Receive Money / QR */}
           <button
             type="button"
             onClick={handleActionReceive}
-            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <Landmark className="w-5 h-5" />
             </div>
-            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.receiveQr}
             </span>
           </button>
@@ -752,6 +780,7 @@ export default function ScannerSimulator() {
         isOpen={showQRScanner}
         onClose={() => setShowQRScanner(false)}
         onScanSuccess={handleQRScanSuccess}
+        onClaimVoucher={claimOfflineVoucher}
       />
 
       {/* MODAL 2: Receive QR Modal */}
@@ -769,6 +798,20 @@ export default function ScannerSimulator() {
         amount={pendingTransfer?.amount}
         payeeName={pendingTransfer?.payeeName}
         payeeUpi={pendingTransfer?.counterparty}
+      />
+
+      {/* MODAL 4: Safe-Wallet Top-Up Modal */}
+      <TopUpModal
+        isOpen={isTopUpModalOpen}
+        onClose={() => setIsTopUpModalOpen(false)}
+        onConfirm={topUpWallet}
+      />
+
+      {/* MODAL 5: Signed Offline Payment Voucher QR Modal */}
+      <OfflineVoucherModal
+        isOpen={showVoucherModal}
+        onClose={() => setShowVoucherModal(false)}
+        voucher={activeVoucher}
       />
 
       {/* MODAL 4: PhonePe Green "Payment Successful" Modal */}

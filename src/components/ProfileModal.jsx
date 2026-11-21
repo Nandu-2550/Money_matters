@@ -38,7 +38,7 @@ export default function ProfileModal() {
   if (!isProfileModalOpen) return null;
 
   const handleCopyUpi = () => {
-    navigator.clipboard.writeText(currentUser.upiId);
+    navigator.clipboard.writeText(currentUser.walletId || currentUser.upiId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -89,7 +89,7 @@ export default function ProfileModal() {
         <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800/80 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-              {t.profile.upiIdLabel}
+              {language === 'kn' ? 'ಸುರಕ್ಷಿತ ವಾಲೆಟ್ ID' : 'Safe-Wallet ID'}
             </span>
             <span className="text-[10px] text-emerald-400 font-mono">
               Sandbox PIN: {currentUser.demoPin || currentUser.demo_pin || '1234'}
@@ -98,7 +98,7 @@ export default function ProfileModal() {
 
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono text-sm font-bold text-slate-200 truncate">
-              {currentUser.upiId}
+              {currentUser.walletId || currentUser.upiId}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
@@ -208,7 +208,7 @@ export default function ProfileModal() {
                     </div>
                     <div>
                       <span className="text-xs font-bold text-slate-200 block">{p.fullName}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">{p.upiId}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">{p.walletId || p.upiId}</span>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-500" />

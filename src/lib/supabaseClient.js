@@ -21,11 +21,13 @@ export const DEFAULT_PROFILES = [
     id: 'usr_nandeesh',
     fullName: 'Nandeesh',
     email: 'nandunusgavai@gmail.com',
-    upiId: 'nandeesh@okicici',
+    walletId: 'nandeesh@mmwallet',
+    wallet_id: 'nandeesh@mmwallet',
+    upiId: 'nandeesh@mmwallet',
     phone: '+91 98765 43210',
-    bankName: 'ICICI Bank',
+    bankName: 'Safe-Wallet Vault',
     accountLast4: '4821',
-    startingBalance: 25000,
+    startingBalance: 5000,
     avatarInitials: 'N',
     password: '1234',
     demoPin: '1234',
@@ -36,11 +38,13 @@ export const DEFAULT_PROFILES = [
     id: 'usr_anjaneya',
     fullName: 'Anjaneya',
     email: 'anjaneya.9480@gmail.com',
-    upiId: 'anjaneya@oksbi',
+    walletId: 'anjaneya@mmwallet',
+    wallet_id: 'anjaneya@mmwallet',
+    upiId: 'anjaneya@mmwallet',
     phone: '+91 94801 23456',
-    bankName: 'State Bank of India',
+    bankName: 'Safe-Wallet Vault',
     accountLast4: '9480',
-    startingBalance: 18500,
+    startingBalance: 3500,
     avatarInitials: 'A',
     password: '1234',
     demoPin: '5678',
@@ -52,60 +56,75 @@ export const DEFAULT_PROFILES = [
 export const DEFAULT_USER_TRANSACTIONS = {
   usr_nandeesh: [
     {
-      id: 'tx_nan_1',
+      id: 'tx_nan_topup',
+      txId: 'tx_topup_1',
       userId: 'usr_nandeesh',
       direction: 'IN',
-      amount: 45000,
-      counterparty: 'techcorp.payroll@icici',
+      amount: 5000,
+      counterparty: 'Safe-Wallet Primary Vault',
+      counterpartyWalletId: 'vault@mmwallet',
       category: 'Salary',
-      message: 'Monthly Software Engineer Salary Credit - Tech Corp',
-      riskScore: 5,
+      txCategory: 'TOPUP',
+      message: 'Initial Smart Safe-Wallet Top-up Allocation',
+      riskScore: 0,
       riskLevel: 'SAFE',
       status: 'VERIFIED',
-      reasons: ['Standard payroll direct credit from corporate gateway.'],
-      reasonsKn: ['ದೃಢೀಕರಿಸಿದ ಕಾರ್ಪೊರೇಟ್ ಗೇಟ್‌ವೇ ಮೂಲಕ ಸಾಮಾನ್ಯ ವೇತನ ಜಮೆ.'],
+      reasons: ['Bank-to-Wallet simulated vault load.'],
+      reasonsKn: ['ವಾಲೆಟ್‌ಗೆ ಆರಂಭಿಕ ಸುರಕ್ಷಿತ ಬ್ಯಾಂಕ್ ಜಮೆ.'],
       isCollectRequest: false,
+      isOfflineQueued: false,
       createdAt: new Date(Date.now() - 3 * 86400000).toISOString()
     },
     {
-      id: 'tx_nan_2',
+      id: 'tx_nan_1',
+      txId: 'tx_shared_1',
       userId: 'usr_nandeesh',
       direction: 'OUT',
-      amount: 2350,
-      counterparty: 'dmart.pos@icici',
+      amount: 1200,
+      counterparty: 'Ravi Store',
+      counterpartyWalletId: 'ravi.store@mmwallet',
       category: 'Retail',
-      message: 'DMart Supermarket Bangalore Groceries',
-      riskScore: 10,
+      txCategory: 'P2P_TRANSFER',
+      message: 'Groceries supply payment - Ravi Kirana Store',
+      riskScore: 5,
       riskLevel: 'SAFE',
       status: 'VERIFIED',
-      reasons: ['Verified retail merchant QR payment.'],
-      reasonsKn: ['ದೃಢೀಕರಿಸಿದ ವ್ಯಾಪಾರಿ ಕ್ಯೂಆರ್ ಪಾವತಿ.'],
+      reasons: ['Verified merchant offline wallet payment.'],
+      reasonsKn: ['ದೃಢೀಕರಿಸಿದ ದಿನಸಿ ಅಂಗಡಿ ವಾಲೆಟ್ ಪಾವತಿ.'],
       isCollectRequest: false,
+      isOfflineQueued: false,
       createdAt: new Date(Date.now() - 2 * 86400000).toISOString()
     },
     {
-      id: 'tx_nan_3',
+      id: 'tx_nan_2',
+      txId: 'tx_shared_p2p_1',
       userId: 'usr_nandeesh',
       direction: 'OUT',
-      amount: 1500,
-      counterparty: 'anjaneya@oksbi',
+      amount: 500,
+      counterparty: 'Anjaneya',
+      counterpartyWalletId: 'anjaneya@mmwallet',
       category: 'Transfer',
+      txCategory: 'P2P_TRANSFER',
       message: 'Dinner share reimbursement to Anjaneya',
       riskScore: 5,
       riskLevel: 'SAFE',
       status: 'VERIFIED',
-      reasons: ['Peer-to-peer payment to known family contact.'],
-      reasonsKn: ['ಕುಟುಂಬ ಅಥವಾ ಸ್ನೇಹಿತರಿಗೆ ಸಾಮಾನ್ಯ ವರ್ಗಾವಣೆ.'],
+      reasons: ['Peer-to-peer safe-wallet transfer.'],
+      reasonsKn: ['ಸ್ನೇಹಿತರಿಗೆ ಸುರಕ್ಷಿತ ವಾಲೆಟ್ ವರ್ಗಾವಣೆ.'],
       isCollectRequest: false,
+      isOfflineQueued: false,
       createdAt: new Date(Date.now() - 1 * 86400000).toISOString()
     },
     {
-      id: 'tx_nan_4',
+      id: 'tx_nan_3',
+      txId: 'tx_suspicious_1',
       userId: 'usr_nandeesh',
       direction: 'OUT',
-      amount: 15000,
+      amount: 2500,
       counterparty: 'vip.trades@okaxis',
+      counterpartyWalletId: 'vip.trades@okaxis',
       category: 'Investment',
+      txCategory: 'INVESTMENT',
       message: 'Guaranteed 40% in 7 days VIP stock group deposit link: http://vipstocks.top/bonus.apk',
       riskScore: 95,
       riskLevel: 'HIGH_RISK',
@@ -116,114 +135,79 @@ export const DEFAULT_USER_TRANSACTIONS = {
         'Malicious APK link detected in payment remarks.'
       ],
       reasonsKn: [
-        'ಅನಧಿಕೃತ ಹೂಡಿಕೆ ಖಾತೆ: SEBI ಮಾನ್ಯತೆ ಪಡೆದ *.brk@valid* ಬದಲು ವೈಯಕ್ತಿಕ UPI ID ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ.',
+        'ಅನಧಿಕೃತ ಹೂಡಿಕೆ ಖಾತೆ: SEBI ಮಾನ್ಯತೆ ಪಡೆದ *.brk@valid* ಬದಲು ವೈಯಕ್ತಿಕ ಖಾತೆಗೆ ಕಳುಹಿಸಲಾಗಿದೆ.',
         'ವಂಚನೆಯ ಪದಗಳು ಪತ್ತೆಯಾಗಿವೆ ("Guaranteed 40% in 7 days").',
         'ಅಪಾಯಕಾರಿ APK ಫೈಲ್ ಲಿಂಕ್ ಸಂದೇಶದಲ್ಲಿ ಪತ್ತೆಯಾಗಿದೆ.'
       ],
       isCollectRequest: false,
-      createdAt: new Date(Date.now() - 8 * 3600000).toISOString()
-    },
-    {
-      id: 'tx_nan_5',
-      userId: 'usr_nandeesh',
-      direction: 'OUT',
-      amount: 1420,
-      counterparty: 'bescom@karnataka',
-      category: 'Utilities',
-      message: 'BESCOM Electricity Bill Payment',
-      riskScore: 5,
-      riskLevel: 'SAFE',
-      status: 'VERIFIED',
-      reasons: ['Bharat BillPay System verified utility payment.'],
-      reasonsKn: ['BBPS ಮೂಲಕ ಸರ್ಕಾರಿ ವಿದ್ಯುತ್ ಶುಲ್ಕ ಪಾವತಿ.'],
-      isCollectRequest: false,
-      createdAt: new Date(Date.now() - 4 * 3600000).toISOString()
+      isOfflineQueued: false,
+      createdAt: new Date(Date.now() - 6 * 3600000).toISOString()
     }
   ],
   usr_anjaneya: [
     {
-      id: 'tx_anj_1',
+      id: 'tx_anj_topup',
+      txId: 'tx_topup_2',
       userId: 'usr_anjaneya',
       direction: 'IN',
-      amount: 1500,
-      counterparty: 'nandeesh@okicici',
+      amount: 3500,
+      counterparty: 'Safe-Wallet Primary Vault',
+      counterpartyWalletId: 'vault@mmwallet',
+      category: 'Salary',
+      txCategory: 'TOPUP',
+      message: 'Initial Smart Safe-Wallet Top-up Allocation',
+      riskScore: 0,
+      riskLevel: 'SAFE',
+      status: 'VERIFIED',
+      reasons: ['Bank-to-Wallet simulated vault load.'],
+      reasonsKn: ['ವಾಲೆಟ್‌ಗೆ ಆರಂಭಿಕ ಸುರಕ್ಷಿತ ಬ್ಯಾಂಕ್ ಜಮೆ.'],
+      isCollectRequest: false,
+      isOfflineQueued: false,
+      createdAt: new Date(Date.now() - 3 * 86400000).toISOString()
+    },
+    {
+      id: 'tx_anj_1',
+      txId: 'tx_shared_p2p_1',
+      userId: 'usr_anjaneya',
+      direction: 'IN',
+      amount: 500,
+      counterparty: 'Nandeesh',
+      counterpartyWalletId: 'nandeesh@mmwallet',
       category: 'Transfer',
+      txCategory: 'P2P_TRANSFER',
       message: 'Dinner share reimbursement from Nandeesh',
       riskScore: 5,
       riskLevel: 'SAFE',
       status: 'VERIFIED',
-      reasons: ['Received peer-to-peer reimbursement.'],
-      reasonsKn: ['ಸ್ನೇಹಿತರಿಂದ ಪಡೆದ ಮರುಪಾವತಿ.'],
+      reasons: ['Received peer-to-peer safe-wallet reimbursement.'],
+      reasonsKn: ['ಸ್ನೇಹಿತರಿಂದ ಪಡೆದ ಸುರಕ್ಷಿತ ವಾಲೆಟ್ ಮರುಪಾವತಿ.'],
       isCollectRequest: false,
+      isOfflineQueued: false,
       createdAt: new Date(Date.now() - 1 * 86400000).toISOString()
     },
     {
       id: 'tx_anj_2',
+      txId: 'tx_trap_1',
       userId: 'usr_anjaneya',
       direction: 'IN',
-      amount: 4200,
-      counterparty: 'customer.anitha@oksbi',
-      category: 'Business',
-      message: 'Tailoring boutique client advance order',
-      riskScore: 10,
-      riskLevel: 'SAFE',
-      status: 'VERIFIED',
-      reasons: ['Verified customer UPI payment for goods/services.'],
-      reasonsKn: ['ಸ್ಥಳೀಯ ವ್ಯಾಪಾರಕ್ಕಾಗಿ ಗ್ರಾಹಕರಿಂದ ಸಾಮಾನ್ಯ ಪಾವತಿ.'],
-      isCollectRequest: false,
-      createdAt: new Date(Date.now() - 2 * 86400000).toISOString()
-    },
-    {
-      id: 'tx_anj_3',
-      userId: 'usr_anjaneya',
-      direction: 'OUT',
-      amount: 2000,
-      counterparty: 'zerodha.brk@validhdfc',
-      category: 'Investment',
-      message: 'Monthly Nifty 50 Index Fund SIP via Zerodha',
-      riskScore: 5,
-      riskLevel: 'SAFE',
-      status: 'VERIFIED',
-      reasons: ['VERIFIED SEBI BROKER: Receiver handle matches *.brk@valid*.'],
-      reasonsKn: ['ದೃಢೀಕರಿಸಿದ SEBI ಸಂಸ್ಥೆ: ಅಧಿಕೃತ ಬ್ರೋಕರ್ ಪ್ರೋಟೋಕಾಲ್ ಹೊಂದಿಕೆಯಾಗಿದೆ.'],
-      isCollectRequest: false,
-      createdAt: new Date(Date.now() - 18 * 3600000).toISOString()
-    },
-    {
-      id: 'tx_anj_4',
-      userId: 'usr_anjaneya',
-      direction: 'IN',
-      amount: 8500,
+      amount: 1500,
       counterparty: 'olx.buyer99@paytm',
+      counterpartyWalletId: 'olx.buyer99@paytm',
       category: 'Retail',
+      txCategory: 'COLLECT_REQUEST',
       message: 'OLX sofa advance token - enter upi pin to receive money',
       riskScore: 95,
       riskLevel: 'HIGH_RISK',
       status: 'HELD_FOR_REVIEW',
       reasons: [
-        'CRITICAL TRAP: Fake Collect Request! You NEVER need to enter UPI PIN to receive money. Entering PIN transfers money OUT.'
+        'CRITICAL TRAP: Fake Collect Request! You NEVER need to enter PIN to receive money. Entering PIN transfers money OUT.'
       ],
       reasonsKn: [
-        'ಗಂಭೀರ ಎಚ್ಚರಿಕೆ: ನಕಲಿ UPI ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ಬಲೆ! ಹಣ ಪಡೆಯಲು ಎಂದಿಗೂ UPI PIN ನಮೂದಿಸುವ ಅಗತ್ಯವಿಲ್ಲ. PIN ನಮೂದಿಸಿದರೆ ಹಣ ಕಡಿತಗೊಳ್ಳುತ್ತದೆ.'
+        'ಗಂಭೀರ ಎಚ್ಚರಿಕೆ: ನಕಲಿ ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ಬಲೆ! ಹಣ ಪಡೆಯಲು ಎಂದಿಗೂ PIN ನಮೂದಿಸುವ ಅಗತ್ಯವಿಲ್ಲ.'
       ],
       isCollectRequest: true,
-      createdAt: new Date(Date.now() - 6 * 3600000).toISOString()
-    },
-    {
-      id: 'tx_anj_5',
-      userId: 'usr_anjaneya',
-      direction: 'OUT',
-      amount: 850,
-      counterparty: 'apollo.pharmacy@hdfcbank',
-      category: 'Emergency',
-      message: 'Monthly prescribed medicines Apollo Pharmacy',
-      riskScore: 5,
-      riskLevel: 'SAFE',
-      status: 'VERIFIED',
-      reasons: ['Verified retail pharmacy merchant payment.'],
-      reasonsKn: ['ದೃಢೀಕರಿಸಿದ ಔಷಧಾಲಯ ವ್ಯಾಪಾರಿ ಪಾವತಿ.'],
-      isCollectRequest: false,
-      createdAt: new Date(Date.now() - 2 * 3600000).toISOString()
+      isOfflineQueued: false,
+      createdAt: new Date(Date.now() - 8 * 3600000).toISOString()
     }
   ]
 };
@@ -255,11 +239,13 @@ export const storageService = {
             id: p.id,
             fullName: p.full_name,
             email: p.email,
-            upiId: p.upi_id,
+            walletId: p.wallet_id || p.upi_id || `${p.email.split('@')[0]}@mmwallet`,
+            wallet_id: p.wallet_id || p.upi_id || `${p.email.split('@')[0]}@mmwallet`,
+            upiId: p.wallet_id || p.upi_id,
             phone: p.phone,
-            bankName: p.bank_name,
-            accountLast4: p.account_last4,
-            startingBalance: Number(p.starting_balance),
+            bankName: p.bank_name || 'Safe-Wallet Vault',
+            accountLast4: p.account_last4 || '8800',
+            startingBalance: Number(p.starting_balance) || 5000,
             avatarInitials: p.avatar_initials,
             password: p.password || '1234',
             demoPin: p.demo_pin || p.demoPin || (p.id === 'usr_anjaneya' ? '5678' : (p.id === 'usr_nandeesh' ? '1234' : '0000')),
@@ -324,10 +310,11 @@ export const storageService = {
           id: newProfile.id,
           full_name: newProfile.fullName,
           email: newProfile.email,
-          upi_id: newProfile.upiId,
+          wallet_id: newProfile.walletId || newProfile.wallet_id || `${newProfile.email.split('@')[0]}@mmwallet`,
+          upi_id: newProfile.walletId || newProfile.upiId,
           phone: newProfile.phone,
-          bank_name: newProfile.bankName,
-          account_last4: newProfile.accountLast4,
+          bank_name: newProfile.bankName || 'Safe-Wallet Vault',
+          account_last4: newProfile.accountLast4 || '8800',
           starting_balance: newProfile.startingBalance,
           avatar_initials: newProfile.avatarInitials,
           password: newProfile.password || '1234',
@@ -336,19 +323,23 @@ export const storageService = {
         };
 
         const { error: pErr } = await supabase.from('profiles').upsert(profilePayload);
-        if (pErr && pErr.message && pErr.message.includes('demo_pin')) {
+        if (pErr && pErr.message && (pErr.message.includes('demo_pin') || pErr.message.includes('wallet_id'))) {
           const fallbackPayload = { ...profilePayload };
           delete fallbackPayload.demo_pin;
+          delete fallbackPayload.wallet_id;
           await supabase.from('profiles').upsert(fallbackPayload);
         }
 
         await supabase.from('transactions').upsert({
           id: welcomeTx.id,
+          tx_id: welcomeTx.txId || welcomeTx.id,
           user_id: welcomeTx.userId,
           direction: welcomeTx.direction,
           amount: welcomeTx.amount,
           counterparty: welcomeTx.counterparty,
+          counterparty_wallet_id: welcomeTx.counterpartyWalletId || 'vault@mmwallet',
           category: welcomeTx.category,
+          tx_category: welcomeTx.txCategory || 'TOPUP',
           message: welcomeTx.message,
           risk_score: welcomeTx.riskScore,
           risk_level: welcomeTx.riskLevel,
@@ -380,17 +371,22 @@ export const storageService = {
         if (!error && Array.isArray(data) && data.length > 0) {
           const mapped = data.map(item => ({
             id: item.id,
+            txId: item.tx_id || item.id,
             userId: item.user_id,
             direction: item.direction,
             amount: Number(item.amount),
             counterparty: item.counterparty,
+            counterpartyWalletId: item.counterparty_wallet_id || item.counterparty,
             category: item.category,
+            txCategory: item.tx_category || 'P2P_TRANSFER',
             message: item.message || '',
             riskScore: item.risk_score,
             riskLevel: item.risk_level,
             status: item.status,
             reasons: Array.isArray(item.reasons) ? item.reasons : (item.reasons ? JSON.parse(item.reasons) : []),
             isCollectRequest: Boolean(item.is_collect_request),
+            isOfflineQueued: Boolean(item.is_offline_queued),
+            voucherSignature: item.voucher_signature || null,
             createdAt: item.created_at || new Date().toISOString(),
           }));
           this.saveLocalUserTransactions(userId, mapped);
@@ -422,23 +418,65 @@ export const storageService = {
       try {
         await supabase.from('transactions').upsert({
           id: tx.id,
+          tx_id: tx.txId || tx.id,
           user_id: tx.userId,
           direction: tx.direction,
           amount: tx.amount,
           counterparty: tx.counterparty,
+          counterparty_wallet_id: tx.counterpartyWalletId || tx.counterparty,
           category: tx.category,
+          tx_category: tx.txCategory || 'P2P_TRANSFER',
           message: tx.message || '',
           risk_score: tx.riskScore,
           risk_level: tx.riskLevel,
           status: tx.status,
           reasons: tx.reasons,
           is_collect_request: Boolean(tx.isCollectRequest),
+          is_offline_queued: Boolean(tx.isOfflineQueued),
+          voucher_signature: tx.voucherSignature || null,
           created_at: tx.createdAt,
           updated_at: new Date().toISOString()
         });
       } catch (err) {
         console.warn('[MoneyMatters] Supabase insert deferred:', err);
       }
+    }
+  },
+
+  async syncOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
+    if (!this.isCloudConnected() || !supabase) return false;
+    try {
+      const rows = [senderDebitTx, receiverCreditTx].map(tx => ({
+        id: tx.id,
+        tx_id: tx.txId || tx.id,
+        user_id: tx.userId,
+        direction: tx.direction,
+        amount: tx.amount,
+        counterparty: tx.counterparty,
+        counterparty_wallet_id: tx.counterpartyWalletId || tx.counterparty,
+        category: tx.category || 'Transfer',
+        tx_category: tx.txCategory || 'P2P_TRANSFER',
+        message: tx.message || '',
+        risk_score: tx.riskScore || 0,
+        risk_level: tx.riskLevel || 'SAFE',
+        status: tx.status || 'VERIFIED',
+        reasons: tx.reasons || [],
+        is_collect_request: Boolean(tx.isCollectRequest),
+        is_offline_queued: false,
+        voucher_signature: tx.voucherSignature || null,
+        created_at: tx.createdAt || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
+      if (error) {
+        console.warn('[MoneyMatters] syncOfflineTransactionPair error:', error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[MoneyMatters] syncOfflineTransactionPair exception:', err);
+      return false;
     }
   },
 

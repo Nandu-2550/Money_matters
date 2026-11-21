@@ -540,7 +540,7 @@ export default function LoginScreen() {
                       </span>
                     </div>
                     <span className="text-[10px] text-slate-400 font-mono block truncate">
-                      {profile.upiId}
+                      {profile.walletId || profile.upiId}
                     </span>
                   </div>
                 </button>

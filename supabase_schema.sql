@@ -1,61 +1,84 @@
 -- =========================================================================
--- Money Matters: Multi-User FinTech Two-Way Scam Shield & Reconciled Schema
--- Supports PhonePe-style Profiles, Registration, & Isolated Ledgers
+-- Money Matters: Standalone Smart Safe-Wallet & Two-Way Offline Handshake Schema
+-- Supports Closed-Loop Wallets, Cryptographic Offline Vouchers, & Idempotent Dual Settlement
 -- =========================================================================
 
--- 1. Create profiles table
+-- 1. Create profiles table (Standalone Smart Safe-Wallet)
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
   full_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
-  upi_id TEXT UNIQUE NOT NULL,
+  wallet_id TEXT UNIQUE NOT NULL,
+  upi_id TEXT,
   phone TEXT,
-  bank_name TEXT NOT NULL,
-  account_last4 TEXT NOT NULL,
-  starting_balance NUMERIC DEFAULT 25000,
+  bank_name TEXT DEFAULT 'Safe-Wallet Vault',
+  account_last4 TEXT DEFAULT '8800',
+  starting_balance NUMERIC DEFAULT 5000,
   avatar_initials TEXT NOT NULL,
   password TEXT DEFAULT '1234',
   demo_pin TEXT DEFAULT '0000',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Ensure password and demo_pin columns exist if table was already created
+-- Upgrade existing profiles table if already created
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS wallet_id TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS upi_id TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '1234';
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS demo_pin TEXT DEFAULT '0000';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT 'Safe-Wallet Vault';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS account_last4 TEXT DEFAULT '8800';
 
--- 2. Create or upgrade transactions table with user_id
+-- 2. Create or upgrade transactions table for dual-sided idempotent settlement
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
+  tx_id TEXT NOT NULL,
   user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
   direction TEXT NOT NULL CHECK (direction IN ('IN', 'OUT')),
   amount NUMERIC NOT NULL CHECK (amount > 0),
   counterparty TEXT NOT NULL,
+  counterparty_wallet_id TEXT,
   category TEXT NOT NULL,
+  tx_category TEXT DEFAULT 'P2P_TRANSFER' CHECK (tx_category IN ('TOPUP', 'P2P_TRANSFER', 'INVESTMENT', 'COLLECT_REQUEST', 'OTHER')),
   message TEXT,
   risk_score INTEGER NOT NULL DEFAULT 0 CHECK (risk_score >= 0 AND risk_score <= 100),
   risk_level TEXT NOT NULL CHECK (risk_level IN ('SAFE', 'SUSPICIOUS', 'HIGH_RISK')),
   status TEXT NOT NULL CHECK (status IN ('VERIFIED', 'HELD_FOR_REVIEW', 'BLOCKED')),
   reasons JSONB DEFAULT '[]'::jsonb,
   is_collect_request BOOLEAN DEFAULT FALSE,
+  is_offline_queued BOOLEAN DEFAULT FALSE,
+  voucher_signature TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Ensure all offline & dual-settlement columns exist on existing table
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_id TEXT;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS counterparty_wallet_id TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_category TEXT DEFAULT 'P2P_TRANSFER';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_offline_queued BOOLEAN DEFAULT FALSE;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS voucher_signature TEXT;
 
--- 3. Indexes
+-- Backfill tx_id = id where tx_id was null
+UPDATE transactions SET tx_id = id WHERE tx_id IS NULL;
+
+-- 3. Indexes & Composite Unique Constraint for Idempotent Dual Settlement
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_tx_id ON transactions(tx_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_direction ON transactions(direction);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
-CREATE INDEX IF NOT EXISTS idx_profiles_upi_id ON profiles(upi_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_wallet_id ON profiles(wallet_id);
+
+-- Composite Unique Index so either device can safely upsert both sides of a transaction
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_tx_user_unique ON transactions(tx_id, user_id);
 
 -- 4. Enable Row Level Security (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
--- 5. Public Demo Policies
+-- 5. Public Demo Policies (idempotent)
 DROP POLICY IF EXISTS "Allow public read profiles" ON profiles;
 DROP POLICY IF EXISTS "Allow public insert profiles" ON profiles;
 DROP POLICY IF EXISTS "Allow public update profiles" ON profiles;
@@ -76,14 +99,15 @@ CREATE POLICY "Allow public insert access" ON transactions FOR INSERT WITH CHECK
 CREATE POLICY "Allow public update access" ON transactions FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete access" ON transactions FOR DELETE USING (true);
 
--- 6. Pre-seed Default Users (Nandeesh with PIN 1234 & Anjaneya with PIN 5678)
-INSERT INTO profiles (id, full_name, email, upi_id, phone, bank_name, account_last4, starting_balance, avatar_initials, password, demo_pin)
+-- 6. Pre-seed Default Smart Safe-Wallets (Nandeesh: ₹5,000, PIN 1234 & Anjaneya: ₹3,500, PIN 5678)
+INSERT INTO profiles (id, full_name, email, wallet_id, upi_id, phone, bank_name, account_last4, starting_balance, avatar_initials, password, demo_pin)
 VALUES
-  ('usr_nandeesh', 'Nandeesh', 'nandunusgavai@gmail.com', 'nandeesh@okicici', '+91 98765 43210', 'ICICI Bank', '4821', 25000, 'N', '1234', '1234'),
-  ('usr_anjaneya', 'Anjaneya', 'anjaneya.9480@gmail.com', 'anjaneya@oksbi', '+91 94801 23456', 'State Bank of India', '9480', 18500, 'A', '1234', '5678')
+  ('usr_nandeesh', 'Nandeesh', 'nandunusgavai@gmail.com', 'nandeesh@mmwallet', 'nandeesh@mmwallet', '+91 98765 43210', 'Safe-Wallet Vault', '4821', 5000, 'N', '1234', '1234'),
+  ('usr_anjaneya', 'Anjaneya', 'anjaneya.9480@gmail.com', 'anjaneya@mmwallet', 'anjaneya@mmwallet', '+91 94801 23456', 'Safe-Wallet Vault', '9480', 3500, 'A', '1234', '5678')
 ON CONFLICT (id) DO UPDATE SET
   full_name = EXCLUDED.full_name,
   email = EXCLUDED.email,
+  wallet_id = EXCLUDED.wallet_id,
   upi_id = EXCLUDED.upi_id,
   bank_name = EXCLUDED.bank_name,
   account_last4 = EXCLUDED.account_last4,
@@ -91,28 +115,28 @@ ON CONFLICT (id) DO UPDATE SET
   password = EXCLUDED.password,
   demo_pin = EXCLUDED.demo_pin;
 
--- 7. Pre-seed Realistic Sample Transactions (with Risk Scores, Review Queue items & P2P)
-INSERT INTO transactions (id, user_id, direction, amount, counterparty, category, message, risk_score, risk_level, status, reasons, is_collect_request, created_at)
+-- 7. Pre-seed Realistic Sample Safe-Wallet Transactions
+INSERT INTO transactions (id, tx_id, user_id, direction, amount, counterparty, counterparty_wallet_id, category, tx_category, message, risk_score, risk_level, status, reasons, is_collect_request, is_offline_queued, created_at)
 VALUES
   -- Nandeesh Transactions
-  ('tx_nan_1', 'usr_nandeesh', 'IN', 45000, 'techcorp.payroll@icici', 'Salary', 'Monthly Software Engineer Salary Credit - Tech Corp', 5, 'SAFE', 'VERIFIED', '["Standard payroll direct credit from corporate gateway."]'::jsonb, FALSE, NOW() - INTERVAL '3 days'),
-  ('tx_nan_2', 'usr_nandeesh', 'OUT', 2350, 'dmart.pos@icici', 'Retail', 'DMart Supermarket Bangalore Groceries', 10, 'SAFE', 'VERIFIED', '["Verified retail merchant QR payment."]'::jsonb, FALSE, NOW() - INTERVAL '2 days'),
-  ('tx_nan_3', 'usr_nandeesh', 'OUT', 1500, 'anjaneya@oksbi', 'Transfer', 'Dinner share reimbursement to Anjaneya', 5, 'SAFE', 'VERIFIED', '["Peer-to-peer payment to known family contact."]'::jsonb, FALSE, NOW() - INTERVAL '1 day'),
-  ('tx_nan_4', 'usr_nandeesh', 'OUT', 15000, 'vip.trades@okaxis', 'Investment', 'Guaranteed 40% in 7 days VIP stock group deposit link: http://vipstocks.top/bonus.apk', 95, 'HIGH_RISK', 'HELD_FOR_REVIEW', '["UNREGISTERED INVESTMENT: Sent to personal handle @okaxis instead of official SEBI *.brk@valid* handle.", "Scam keywords detected: Guaranteed 40% in 7 days.", "Malicious APK link detected in payment remarks."]'::jsonb, FALSE, NOW() - INTERVAL '8 hours'),
-  ('tx_nan_5', 'usr_nandeesh', 'OUT', 1420, 'bescom@karnataka', 'Utilities', 'BESCOM Electricity Bill Payment', 5, 'SAFE', 'VERIFIED', '["Bharat BillPay System verified utility payment."]'::jsonb, FALSE, NOW() - INTERVAL '4 hours'),
+  ('tx_nan_topup', 'tx_topup_1', 'usr_nandeesh', 'IN', 5000, 'Safe-Wallet Primary Vault', 'vault@mmwallet', 'Salary', 'TOPUP', 'Initial Smart Safe-Wallet Top-up Allocation', 0, 'SAFE', 'VERIFIED', '["Bank-to-Wallet simulated vault load."]'::jsonb, FALSE, FALSE, NOW() - INTERVAL '3 days'),
+  ('tx_nan_1', 'tx_shared_1', 'usr_nandeesh', 'OUT', 1200, 'Ravi Store', 'ravi.store@mmwallet', 'Retail', 'P2P_TRANSFER', 'Groceries supply payment - Ravi Kirana Store', 5, 'SAFE', 'VERIFIED', '["Verified offline merchant store payment."]'::jsonb, FALSE, FALSE, NOW() - INTERVAL '2 days'),
+  ('tx_nan_2', 'tx_shared_p2p_1', 'usr_nandeesh', 'OUT', 500, 'Anjaneya', 'anjaneya@mmwallet', 'Transfer', 'P2P_TRANSFER', 'Dinner share reimbursement to Anjaneya', 5, 'SAFE', 'VERIFIED', '["Peer-to-peer safe-wallet transfer."]'::jsonb, FALSE, FALSE, NOW() - INTERVAL '1 day'),
+  ('tx_nan_3', 'tx_suspicious_1', 'usr_nandeesh', 'OUT', 2500, 'vip.trades@okaxis', 'vip.trades@okaxis', 'Investment', 'INVESTMENT', 'Guaranteed 40% in 7 days VIP stock group deposit link: http://vipstocks.top/bonus.apk', 95, 'HIGH_RISK', 'HELD_FOR_REVIEW', '["UNREGISTERED INVESTMENT: Sent to personal handle instead of official SEBI *.brk@valid* handle.", "Scam keywords detected.", "Malicious APK link detected."]'::jsonb, FALSE, FALSE, NOW() - INTERVAL '6 hours'),
 
   -- Anjaneya Transactions
-  ('tx_anj_1', 'usr_anjaneya', 'IN', 1500, 'nandeesh@okicici', 'Transfer', 'Dinner share reimbursement from Nandeesh', 5, 'SAFE', 'VERIFIED', '["Received peer-to-peer reimbursement."]'::jsonb, FALSE, NOW() - INTERVAL '1 day'),
-  ('tx_anj_2', 'usr_anjaneya', 'IN', 4200, 'customer.anitha@oksbi', 'Business', 'Tailoring boutique client advance order', 10, 'SAFE', 'VERIFIED', '["Verified customer UPI payment for goods/services."]'::jsonb, FALSE, NOW() - INTERVAL '2 days'),
-  ('tx_anj_3', 'usr_anjaneya', 'OUT', 2000, 'zerodha.brk@validhdfc', 'Investment', 'Monthly Nifty 50 Index Fund SIP via Zerodha', 5, 'SAFE', 'VERIFIED', '["VERIFIED SEBI BROKER: Receiver handle matches *.brk@valid*."]'::jsonb, FALSE, NOW() - INTERVAL '18 hours'),
-  ('tx_anj_4', 'usr_anjaneya', 'IN', 8500, 'olx.buyer99@paytm', 'Retail', 'OLX sofa advance token - enter upi pin to receive money', 95, 'HIGH_RISK', 'HELD_FOR_REVIEW', '["CRITICAL TRAP: Fake Collect Request! You NEVER need to enter UPI PIN to receive money. Entering PIN transfers money OUT."]'::jsonb, TRUE, NOW() - INTERVAL '6 hours'),
-  ('tx_anj_5', 'usr_anjaneya', 'OUT', 850, 'apollo.pharmacy@hdfcbank', 'Emergency', 'Monthly prescribed medicines Apollo Pharmacy', 5, 'SAFE', 'VERIFIED', '["Verified retail pharmacy merchant payment."]'::jsonb, FALSE, NOW() - INTERVAL '2 hours')
+  ('tx_anj_topup', 'tx_topup_2', 'usr_anjaneya', 'IN', 3500, 'Safe-Wallet Primary Vault', 'vault@mmwallet', 'Salary', 'TOPUP', 'Initial Smart Safe-Wallet Top-up Allocation', 0, 'SAFE', 'VERIFIED', '["Bank-to-Wallet simulated vault load."]'::jsonb, FALSE, FALSE, NOW() - INTERVAL '3 days'),
+  ('tx_anj_1', 'tx_shared_p2p_1', 'usr_anjaneya', 'IN', 500, 'Nandeesh', 'nandeesh@mmwallet', 'Transfer', 'P2P_TRANSFER', 'Dinner share reimbursement from Nandeesh', 5, 'SAFE', 'VERIFIED', '["Received peer-to-peer safe-wallet reimbursement."]'::jsonb, FALSE, FALSE, NOW() - INTERVAL '1 day'),
+  ('tx_anj_2', 'tx_trap_1', 'usr_anjaneya', 'IN', 1500, 'olx.buyer99@paytm', 'olx.buyer99@paytm', 'Retail', 'COLLECT_REQUEST', 'OLX advance token - enter upi pin to receive money', 95, 'HIGH_RISK', 'HELD_FOR_REVIEW', '["CRITICAL TRAP: Fake Collect Request! You NEVER need to enter PIN to receive money."]'::jsonb, TRUE, FALSE, NOW() - INTERVAL '8 hours')
 ON CONFLICT (id) DO UPDATE SET
+  tx_id = EXCLUDED.tx_id,
   user_id = EXCLUDED.user_id,
   direction = EXCLUDED.direction,
   amount = EXCLUDED.amount,
   counterparty = EXCLUDED.counterparty,
+  counterparty_wallet_id = EXCLUDED.counterparty_wallet_id,
   category = EXCLUDED.category,
+  tx_category = EXCLUDED.tx_category,
   message = EXCLUDED.message,
   risk_score = EXCLUDED.risk_score,
   risk_level = EXCLUDED.risk_level,
