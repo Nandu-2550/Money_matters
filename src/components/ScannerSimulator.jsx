@@ -17,7 +17,8 @@ import {
   Check,
   Lock,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  User
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { findMatchingProfile } from '../lib/supabaseClient';
@@ -43,7 +44,8 @@ export default function ScannerSimulator() {
     setIsTopUpModalOpen,
     showToast,
     isBalanceRevealed,
-    setIsBalanceRevealed
+    setIsBalanceRevealed,
+    setIsProfileModalOpen
   } = useWallet();
 
   // Form State
@@ -263,76 +265,91 @@ export default function ScannerSimulator() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       
-      {/* 1. PhonePe-Style 4-Icon Action Bar */}
+      {/* 1. PhonePe-Style 6-Icon Action Grid (3 in Row 1, 3 in Row 2) */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
-        <div className="grid grid-cols-5 gap-1.5 sm:gap-3 text-center">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3.5 text-center">
           
-          {/* 1. Scan Any QR */}
+          {/* 1. Profile / Account (First Icon) */}
+          <button
+            type="button"
+            onClick={() => setIsProfileModalOpen(true)}
+            className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            title="Open Profile & Bank Details"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/30 border border-emerald-500/30 text-emerald-300 flex items-center justify-center group-hover:scale-105 transition shadow-sm font-black text-sm">
+              {currentUser?.avatarInitials || <User className="w-5 h-5 text-emerald-400" />}
+            </div>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {t.quickActions.profile || (language === 'kn' ? 'ಪ್ರೊಫೈಲ್' : 'Profile')}
+            </span>
+          </button>
+
+          {/* 2. Scan Any QR */}
           <button
             type="button"
             onClick={handleActionScanQR}
-            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <QrCode className="w-5 h-5" />
             </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.scanQr || 'Scan Any QR'}
             </span>
           </button>
 
-          {/* 2. To Mobile / UPI */}
+          {/* 3. To Mobile / UPI */}
           <button
             type="button"
             onClick={handleActionToMobile}
-            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <Smartphone className="w-5 h-5" />
             </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.toMobile}
             </span>
           </button>
 
-          {/* 3. Top-Up Safe Wallet */}
+          {/* 4. Top-Up Safe Wallet */}
           <button
             type="button"
             onClick={() => setIsTopUpModalOpen(true)}
-            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <CreditCard className="w-5 h-5" />
             </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {language === 'kn' ? 'ಹಣ ಸೇರಿಸಿ' : 'Add Money'}
             </span>
           </button>
 
-          {/* 4. Check Bank Balance */}
+          {/* 5. Check Bank Balance */}
           <button
             type="button"
             onClick={handleActionCheckBalance}
-            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <Lock className="w-5 h-5" />
             </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.checkBalance}
             </span>
           </button>
 
-          {/* 5. Receive Money / QR */}
+          {/* 6. Receive Money / QR */}
           <button
             type="button"
             onClick={handleActionReceive}
-            className="flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <Landmark className="w-5 h-5" />
             </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
               {t.quickActions.receiveQr}
             </span>
           </button>

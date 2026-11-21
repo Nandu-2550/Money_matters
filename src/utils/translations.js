@@ -89,6 +89,7 @@ export const translations = {
       activeAccount: "Active Account"
     },
     quickActions: {
+      profile: "Profile",
       scanQr: "Scan Any QR",
       toMobile: "To Mobile / UPI",
       receiveQr: "Receive / QR",
@@ -320,6 +321,7 @@ export const translations = {
       activeAccount: "ಸಕ್ರಿಯ ಖಾತೆ"
     },
     quickActions: {
+      profile: "ಪ್ರೊಫೈಲ್",
       scanQr: "ಯಾವುದೇ QR ಸ್ಕ್ಯಾನ್",
       toMobile: "ಮೊಬೈಲ್ / UPI ಗೆ",
       receiveQr: "ಸ್ವೀಕರಿಸಿ / QR",

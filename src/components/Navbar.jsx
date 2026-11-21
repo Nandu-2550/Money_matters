@@ -4,14 +4,12 @@ import {
   Download, 
   Languages, 
   Clock, 
-  BarChart3, 
-  ChevronDown
+  BarChart3
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
 export default function Navbar() {
   const { 
-    currentUser, 
     language, 
     toggleLanguage, 
     t, 
@@ -19,8 +17,7 @@ export default function Navbar() {
     setActiveTab, 
     computedMetrics, 
     promptInstall, 
-    isInstalled, 
-    setIsProfileModalOpen
+    isInstalled
   } = useWallet();
 
   const heldCount = computedMetrics.heldTransactions.length;
@@ -32,42 +29,17 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-3">
             
-            {/* Left: App Brand Logo + Profile Button */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Brand Logo */}
-              <div className="flex items-center gap-2 pr-2 border-r border-slate-800">
-                <img 
-                  src="/logo.png" 
-                  alt="Money Matters Logo" 
-                  className="w-9 h-9 rounded-xl object-cover shadow-sm border border-slate-700/60 hover:scale-105 transition" 
-                />
-                <div className="hidden lg:block leading-tight">
-                  <span className="text-xs font-bold text-white block">Money Matters</span>
-                  <span className="text-[9px] text-emerald-400 font-semibold block">Safe Wallet</span>
-                </div>
+            {/* Left: App Brand Logo Only */}
+            <div className="flex items-center gap-2.5">
+              <img 
+                src="/logo.png" 
+                alt="Money Matters Logo" 
+                className="w-9 h-9 rounded-xl object-cover shadow-sm border border-slate-700/60 hover:scale-105 transition" 
+              />
+              <div className="leading-tight">
+                <span className="text-sm font-bold text-white block tracking-tight">Money Matters</span>
+                <span className="text-[10px] text-emerald-400 font-semibold block">Safe Wallet</span>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setIsProfileModalOpen(true)}
-                className="flex items-center gap-2.5 p-1 pr-2.5 rounded-2xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 transition text-left cursor-pointer group"
-                title="Open Profile & Bank Details"
-              >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-slate-950 font-black text-sm flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
-                  {currentUser?.avatarInitials || 'U'}
-                </div>
-                <div className="hidden min-[440px]:block">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-white leading-tight">
-                      {currentUser?.fullName}
-                    </span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition" />
-                  </div>
-                  <span className="text-[10px] text-slate-400 block font-mono leading-none">
-                    {currentUser?.walletId || currentUser?.upiId}
-                  </span>
-                </div>
-              </button>
             </div>
 
             {/* Desktop Navigation Tabs */}
