@@ -1,11 +1,26 @@
 -- =========================================================================
--- Money Matters: FinTech Two-Way Scam Shield & Reconciled Cash Flow Schema
--- HackSprint 3.0 Production Database Definition
+-- Money Matters: Multi-User FinTech Two-Way Scam Shield & Reconciled Schema
+-- Supports PhonePe-style Profiles, Email Verification, & Isolated Ledgers
 -- =========================================================================
 
--- 1. Create transactions table
+-- 1. Create profiles table
+CREATE TABLE IF NOT EXISTS profiles (
+  id TEXT PRIMARY KEY,
+  full_name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  upi_id TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  bank_name TEXT NOT NULL,
+  account_last4 TEXT NOT NULL,
+  starting_balance NUMERIC DEFAULT 25000,
+  avatar_initials TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Create or upgrade transactions table with user_id
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
   direction TEXT NOT NULL CHECK (direction IN ('IN', 'OUT')),
   amount NUMERIC NOT NULL CHECK (amount > 0),
   counterparty TEXT NOT NULL,
@@ -20,43 +35,72 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Index frequently filtered columns
+-- Ensure user_id column exists if table was already created
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE;
+
+-- 3. Indexes for fast queries
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_direction ON transactions(direction);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_upi_id ON profiles(upi_id);
 
--- 3. Enable Row Level Security (RLS)
+-- 4. Enable Row Level Security (RLS)
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
--- 4. Idempotent Public Policies (Safe to run multiple times without 42710 errors)
+-- 5. Public Demo Policies (Safe and Idempotent)
+DROP POLICY IF EXISTS "Allow public read profiles" ON profiles;
+DROP POLICY IF EXISTS "Allow public insert profiles" ON profiles;
+DROP POLICY IF EXISTS "Allow public update profiles" ON profiles;
+DROP POLICY IF EXISTS "Allow public delete profiles" ON profiles;
+
+CREATE POLICY "Allow public read profiles" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Allow public insert profiles" ON profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update profiles" ON profiles FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete profiles" ON profiles FOR DELETE USING (true);
+
 DROP POLICY IF EXISTS "Allow public read access" ON transactions;
 DROP POLICY IF EXISTS "Allow public insert access" ON transactions;
 DROP POLICY IF EXISTS "Allow public update access" ON transactions;
 DROP POLICY IF EXISTS "Allow public delete access" ON transactions;
 
-CREATE POLICY "Allow public read access" ON transactions
-  FOR SELECT USING (true);
+CREATE POLICY "Allow public read access" ON transactions FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access" ON transactions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update access" ON transactions FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete access" ON transactions FOR DELETE USING (true);
 
-CREATE POLICY "Allow public insert access" ON transactions
-  FOR INSERT WITH CHECK (true);
+-- 6. Pre-seed Default Users (Nandeesh & Anjaneya)
+INSERT INTO profiles (id, full_name, email, upi_id, phone, bank_name, account_last4, starting_balance, avatar_initials)
+VALUES
+  ('usr_nandeesh', 'Nandeesh', 'nandunusgavai@gmail.com', 'nandeesh@okicici', '+91 98765 43210', 'ICICI Bank', '4821', 25000, 'N'),
+  ('usr_anjaneya', 'Anjaneya', 'anjaneya.9480@gmail.com', 'anjaneya@oksbi', '+91 94801 23456', 'State Bank of India', '9480', 18500, 'A')
+ON CONFLICT (id) DO UPDATE SET
+  full_name = EXCLUDED.full_name,
+  email = EXCLUDED.email,
+  upi_id = EXCLUDED.upi_id,
+  bank_name = EXCLUDED.bank_name,
+  account_last4 = EXCLUDED.account_last4,
+  starting_balance = EXCLUDED.starting_balance;
 
-CREATE POLICY "Allow public update access" ON transactions
-  FOR UPDATE USING (true);
+-- 7. Pre-seed Isolated Benchmark Transactions
+-- Nandeesh's Transactions (Starting Balance: ₹25,000)
+INSERT INTO transactions (id, user_id, direction, amount, counterparty, category, message, risk_score, risk_level, status, reasons, is_collect_request, created_at)
+VALUES
+  ('tx_nan_1', 'usr_nandeesh', 'IN', 45000, 'techcorp.payroll@icici', 'Salary', 'Monthly Software Engineer Salary Credit - Tech Corp', 5, 'SAFE', 'VERIFIED', '["Standard payroll direct credit from corporate gateway."]'::jsonb, false, NOW() - INTERVAL '3 days'),
+  ('tx_nan_2', 'usr_nandeesh', 'OUT', 2350, 'dmart.pos@icici', 'Retail', 'DMart Supermarket Bangalore Groceries', 10, 'SAFE', 'VERIFIED', '["Verified retail merchant QR payment."]'::jsonb, false, NOW() - INTERVAL '2 days'),
+  ('tx_nan_3', 'usr_nandeesh', 'OUT', 1500, 'anjaneya@oksbi', 'Transfer', 'Dinner share reimbursement to Anjaneya', 5, 'SAFE', 'VERIFIED', '["Peer to peer payment to known family contact."]'::jsonb, false, NOW() - INTERVAL '1 day'),
+  ('tx_nan_4', 'usr_nandeesh', 'OUT', 15000, 'vip.trades@okaxis', 'Investment', 'Guaranteed 40% in 7 days VIP stock group deposit link: http://vipstocks.top/bonus.apk', 95, 'HIGH_RISK', 'HELD_FOR_REVIEW', '["UNREGISTERED INVESTMENT: Sent to personal handle @okaxis instead of official SEBI *.brk@valid* handle.", "Scam promise keywords detected (\"Guaranteed 40%\").", "Malicious APK file detected."]'::jsonb, false, NOW() - INTERVAL '8 hours'),
+  ('tx_nan_5', 'usr_nandeesh', 'OUT', 1420, 'bescom@karnataka', 'Utilities', 'BESCOM Electricity Bill Payment', 5, 'SAFE', 'VERIFIED', '["Bharat BillPay System verified utility payment."]'::jsonb, false, NOW() - INTERVAL '4 hours')
+ON CONFLICT (id) DO NOTHING;
 
-CREATE POLICY "Allow public delete access" ON transactions
-  FOR DELETE USING (true);
-
--- 5. Auto-update timestamp trigger
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-   NEW.updated_at = NOW();
-   RETURN NEW;
-END;
-$$ LANGUAGE 'plpgsql';
-
-DROP TRIGGER IF EXISTS trigger_update_transactions_updated_at ON transactions;
-CREATE TRIGGER trigger_update_transactions_updated_at
-BEFORE UPDATE ON transactions
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+-- Anjaneya's Transactions (Starting Balance: ₹18,500)
+INSERT INTO transactions (id, user_id, direction, amount, counterparty, category, message, risk_score, risk_level, status, reasons, is_collect_request, created_at)
+VALUES
+  ('tx_anj_1', 'usr_anjaneya', 'IN', 1500, 'nandeesh@okicici', 'Transfer', 'Dinner share reimbursement from Nandeesh', 5, 'SAFE', 'VERIFIED', '["Received peer-to-peer reimbursement."]'::jsonb, false, NOW() - INTERVAL '1 day'),
+  ('tx_anj_2', 'usr_anjaneya', 'IN', 4200, 'customer.anitha@oksbi', 'Business', 'Tailoring boutique client advance order', 10, 'SAFE', 'VERIFIED', '["Verified customer UPI payment for goods/services."]'::jsonb, false, NOW() - INTERVAL '2 days'),
+  ('tx_anj_3', 'usr_anjaneya', 'OUT', 2000, 'zerodha.brk@validhdfc', 'Investment', 'Monthly Nifty 50 Index Fund SIP via Zerodha', 5, 'SAFE', 'VERIFIED', '["VERIFIED SEBI BROKER: Receiver handle matches *.brk@valid*."]'::jsonb, false, NOW() - INTERVAL '18 hours'),
+  ('tx_anj_4', 'usr_anjaneya', 'IN', 8500, 'olx.buyer99@paytm', 'Retail', 'OLX sofa advance token - enter upi pin to receive money', 95, 'HIGH_RISK', 'HELD_FOR_REVIEW', '["CRITICAL TRAP: Fake Collect Request! You NEVER need to enter UPI PIN to receive money. Entering PIN transfers money OUT."]'::jsonb, true, NOW() - INTERVAL '6 hours'),
+  ('tx_anj_5', 'usr_anjaneya', 'OUT', 850, 'apollo.pharmacy@hdfcbank', 'Emergency', 'Monthly prescribed medicines Apollo Pharmacy', 5, 'SAFE', 'VERIFIED', '["Verified retail pharmacy merchant payment."]'::jsonb, false, NOW() - INTERVAL '2 hours')
+ON CONFLICT (id) DO NOTHING;

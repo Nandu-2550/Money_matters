@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { storageService } from '../lib/supabaseClient';
+import { 
+  storageService, 
+  DEFAULT_PROFILES, 
+  supabase, 
+  isSupabaseConfigured 
+} from '../lib/supabaseClient';
 import { scoreTransaction } from '../utils/fraudEngine';
 import { translations } from '../utils/translations';
 
@@ -7,164 +12,34 @@ const WalletContext = createContext(null);
 
 export const STARTING_BALANCE = 25000;
 
-// Pre-seeded realistic dummy transactions for instant rich demonstration
-export const INITIAL_TRANSACTIONS = [
-  {
-    id: 'tx_seed_1',
-    direction: 'IN',
-    amount: 45000,
-    counterparty: 'techcorp.payroll@icici',
-    category: 'Salary',
-    message: 'Monthly Software Engineer Salary Credit - Tech Corp India',
-    riskScore: 5,
-    riskLevel: 'SAFE',
-    status: 'VERIFIED',
-    reasons: ['Standard payroll direct credit from verified corporate banking gateway.'],
-    reasonsKn: ['ದೃಢೀಕರಿಸಿದ ಕಾರ್ಪೊರೇಟ್ ಗೇಟ್‌ವೇ ಮೂಲಕ ಸಾಮಾನ್ಯ ವೇತನ ಜಮೆ.'],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 4 * 86400000).toISOString()
-  },
-  {
-    id: 'tx_seed_2',
-    direction: 'OUT',
-    amount: 2350,
-    counterparty: 'dmart.pos@icici',
-    category: 'Retail',
-    message: 'DMart Supermarket Bangalore Monthly Groceries',
-    riskScore: 10,
-    riskLevel: 'SAFE',
-    status: 'VERIFIED',
-    reasons: ['Verified retail merchant QR payment.'],
-    reasonsKn: ['ದೃಢೀಕರಿಸಿದ ವ್ಯಾಪಾರಿ ಕ್ಯೂಆರ್ ಪಾವತಿ.'],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString()
-  },
-  {
-    id: 'tx_seed_3',
-    direction: 'OUT',
-    amount: 1420,
-    counterparty: 'bescom@karnataka',
-    category: 'Utilities',
-    message: 'BESCOM Electricity Bill Payment Karnataka',
-    riskScore: 5,
-    riskLevel: 'SAFE',
-    status: 'VERIFIED',
-    reasons: ['State utility bill payment via Bharat BillPay System (BBPS).'],
-    reasonsKn: ['BBPS ಮೂಲಕ ಸರ್ಕಾರಿ ವಿದ್ಯುತ್ ಶುಲ್ಕ ಪಾವತಿ.'],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString()
-  },
-  {
-    id: 'tx_seed_4',
-    direction: 'OUT',
-    amount: 15000,
-    counterparty: 'vip.profit@okaxis',
-    category: 'Investment',
-    message: 'VIP Stock signals group 40% weekly return join now http://vip-stocks.xyz/bonus.apk',
-    riskScore: 95,
-    riskLevel: 'HIGH_RISK',
-    status: 'HELD_FOR_REVIEW',
-    reasons: [
-      'UNREGISTERED INVESTMENT RECIPIENT: Stock investment sent to personal handle (@okaxis) instead of SEBI *.brk@valid* handle.',
-      'High-pressure scam keywords detected ("40% weekly return").',
-      'Malicious APK link detected in payment remarks.'
-    ],
-    reasonsKn: [
-      'ಅನಧಿಕೃತ ಹೂಡಿಕೆ ಖಾತೆ: SEBI ಮಾನ್ಯತೆ ಪಡೆದ *.brk@valid* ಬದಲು ವೈಯಕ್ತಿಕ UPI ID (@okaxis) ಗೆ ಹೂಡಿಕೆ ಕಳುಹಿಸಲಾಗಿದೆ.',
-      'ವಂಚನೆಯ ಆಮಿಷದ ಪದಗಳು ಪತ್ತೆಯಾಗಿವೆ ("40% weekly return").',
-      'ಅಪಾಯಕಾರಿ APK ಫೈಲ್ ಲಿಂಕ್ ಸಂದೇಶದಲ್ಲಿ ಪತ್ತೆಯಾಗಿದೆ.'
-    ],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 1 * 86400000).toISOString()
-  },
-  {
-    id: 'tx_seed_5',
-    direction: 'IN',
-    amount: 3800,
-    counterparty: 'anitha.m@oksbi',
-    category: 'Business',
-    message: 'Custom tailoring boutique payment from Anitha',
-    riskScore: 10,
-    riskLevel: 'SAFE',
-    status: 'VERIFIED',
-    reasons: ['Regular peer-to-peer customer payment for local business.'],
-    reasonsKn: ['ಸ್ಥಳೀಯ ವ್ಯಾಪಾರಕ್ಕಾಗಿ ಗ್ರಾಹಕರಿಂದ ಸಾಮಾನ್ಯ ಪಾವತಿ.'],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 20 * 3600000).toISOString()
-  },
-  {
-    id: 'tx_seed_6',
-    direction: 'IN',
-    amount: 8500,
-    counterparty: 'olx.buyer99@paytm',
-    category: 'Retail',
-    message: 'OLX sofa advance token - enter upi pin to receive money into account',
-    riskScore: 95,
-    riskLevel: 'HIGH_RISK',
-    status: 'BLOCKED',
-    reasons: [
-      'CRITICAL: Fake UPI Collect Request Trap! You NEVER need to enter your UPI PIN to receive money. Entering your PIN transfers money OUT of your bank account.'
-    ],
-    reasonsKn: [
-      'ಗಂಭೀರ ಎಚ್ಚರಿಕೆ: ನಕಲಿ UPI ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ಬಲೆ! ಹಣ ಪಡೆಯಲು ಎಂದಿಗೂ UPI PIN ನಮೂದಿಸುವ ಅಗತ್ಯವಿಲ್ಲ. PIN ನಮೂದಿಸಿದರೆ ನಿಮ್ಮ ಖಾತೆಯಿಂದ ಹಣ ಕಡಿತಗೊಳ್ಳುತ್ತದೆ.'
-    ],
-    isCollectRequest: true,
-    createdAt: new Date(Date.now() - 14 * 3600000).toISOString()
-  },
-  {
-    id: 'tx_seed_7',
-    direction: 'OUT',
-    amount: 2500,
-    counterparty: 'zerodha.brk@validhdfc',
-    category: 'Investment',
-    message: 'Nifty 50 Index Mutual Fund Monthly SIP via Zerodha',
-    riskScore: 5,
-    riskLevel: 'SAFE',
-    status: 'VERIFIED',
-    reasons: [
-      'VERIFIED SEBI ENTITY: Counterparty handle matches official SEBI-registered broker protocol (*.brk@validhdfc).'
-    ],
-    reasonsKn: [
-      'ದೃಢೀಕರಿಸಿದ SEBI ಸಂಸ್ಥೆ: ಅಧಿಕೃತ SEBI ನೋಂದಾಯಿತ ಬ್ರೋಕರ್ ಪ್ರೋಟೋಕಾಲ್ ಹೊಂದಿಕೆಯಾಗಿದೆ.'
-    ],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 8 * 3600000).toISOString()
-  },
-  {
-    id: 'tx_seed_8',
-    direction: 'OUT',
-    amount: 12000,
-    counterparty: 'urgent.help88@ybl',
-    category: 'Emergency',
-    message: 'Urgent hospital emergency send 12000 within 10 mins friend accident',
-    riskScore: 65,
-    riskLevel: 'SUSPICIOUS',
-    status: 'HELD_FOR_REVIEW',
-    reasons: [
-      'High-pressure urgency keywords detected ("urgent", "within 10 mins").',
-      'High-value transfer (> ₹10,000) to new unverified recipient.'
-    ],
-    reasonsKn: [
-      'ತುರ್ತು ಒತ್ತಡದ ಪದಗಳು ಪತ್ತೆಯಾಗಿವೆ ("urgent", "within 10 mins").',
-      'ಹೊಸ ಸ್ವೀಕೃತಿದಾರರಿಗೆ ಹೆಚ್ಚಿನ ಮೊತ್ತದ ಹಣ ವರ್ಗಾವಣೆ (> ₹10,000).'
-    ],
-    isCollectRequest: false,
-    createdAt: new Date(Date.now() - 3 * 3600000).toISOString()
-  }
-];
+const AUTH_USER_KEY = 'money_matters_auth_v2';
 
 export function WalletProvider({ children }) {
+  const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
+  const [currentUserId, setCurrentUserId] = useState(() => {
+    return localStorage.getItem(AUTH_USER_KEY) || DEFAULT_PROFILES[0].id;
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return Boolean(localStorage.getItem(AUTH_USER_KEY));
+  });
+
   const [transactions, setTransactions] = useState([]);
   const [language, setLanguage] = useState(() => {
     return localStorage.getItem('mm_lang') || 'en';
   });
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [activeTab, setActiveTab] = useState('scan'); // 'scan' | 'queue' | 'dashboard'
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Monitor network status
+  // Active Profile Object
+  const currentUser = useMemo(() => {
+    return profiles.find(p => p.id === currentUserId) || profiles[0] || DEFAULT_PROFILES[0];
+  }, [profiles, currentUserId]);
+
+  // Online / Offline monitor
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -176,13 +51,12 @@ export function WalletProvider({ children }) {
     };
   }, []);
 
-  // Monitor PWA install prompt
+  // PWA install monitor
   useEffect(() => {
     const handleBeforeInstall = (e) => {
       e.preventDefault();
       setInstallPrompt(e);
     };
-
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setInstallPrompt(null);
@@ -195,27 +69,48 @@ export function WalletProvider({ children }) {
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
     }
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
-  // Initial data load from storage/supabase
+  // Supabase Auth listener
   useEffect(() => {
-    let mounted = true;
-    storageService.loadTransactions(INITIAL_TRANSACTIONS).then(data => {
-      if (mounted) {
-        setTransactions(data);
-      }
+    if (isSupabaseConfigured && supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session?.user?.email) {
+          const matched = profiles.find(p => p.email.toLowerCase() === session.user.email.toLowerCase());
+          if (matched) {
+            loginAsUser(matched.id);
+          } else {
+            // New user signed in via OTP
+            loginAsUser(DEFAULT_PROFILES[0].id);
+          }
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [profiles]);
+
+  // Load profiles on mount
+  useEffect(() => {
+    storageService.loadProfiles().then(loadedProfiles => {
+      setProfiles(loadedProfiles);
     });
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  // Toggle Language & persist
+  // Load active user's isolated transactions whenever active user changes
+  useEffect(() => {
+    if (currentUser?.id) {
+      storageService.loadUserTransactions(currentUser.id).then(userTx => {
+        setTransactions(userTx);
+      });
+    }
+  }, [currentUser?.id]);
+
   const toggleLanguage = useCallback(() => {
     setLanguage(prev => {
       const next = prev === 'en' ? 'kn' : 'en';
@@ -231,12 +126,60 @@ export function WalletProvider({ children }) {
     }, 4000);
   }, []);
 
+  // Login as specific user profile (Nandeesh or Anjaneya or dynamic)
+  const loginAsUser = useCallback((userId) => {
+    setCurrentUserId(userId);
+    setIsAuthenticated(true);
+    localStorage.setItem(AUTH_USER_KEY, userId);
+    storageService.setActiveUserId(userId);
+    storageService.loadUserTransactions(userId).then(setTransactions);
+  }, []);
+
+  // Logout
+  const logout = useCallback(async () => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+    }
+    setIsAuthenticated(false);
+    localStorage.removeItem(AUTH_USER_KEY);
+  }, []);
+
+  // Send Email OTP / Magic Link via Supabase
+  const sendEmailVerification = useCallback(async (email) => {
+    if (!isSupabaseConfigured || !supabase) {
+      // Offline fallback: check if matches demo user
+      const matched = profiles.find(p => p.email.toLowerCase() === email.trim().toLowerCase());
+      if (matched) {
+        loginAsUser(matched.id);
+        return { success: true, isDemo: true };
+      }
+      return { success: false, error: 'Supabase offline: use quick demo profiles below.' };
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: window.location.origin
+        }
+      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }, [profiles, loginAsUser]);
+
   // ==========================================
-  // EXACT MATHEMATICAL LEDGER RECONCILIATION
+  // EXACT MATHEMATICAL RECONCILIATION PER USER
   // Starting Balance + Verified Inflows - Verified Outflows === Current Balance
-  // HELD_FOR_REVIEW & BLOCKED transactions NEVER affect Current Balance
   // ==========================================
   const computedMetrics = useMemo(() => {
+    const startingBalance = Number(currentUser?.startingBalance) || 25000;
     let totalInflow = 0;
     let totalOutflow = 0;
     let totalSavedFromScams = 0;
@@ -250,18 +193,17 @@ export function WalletProvider({ children }) {
           totalOutflow += amt;
         }
       } else if (tx.status === 'BLOCKED') {
-        // Amount intercepted and protected from fraudulent loss
         totalSavedFromScams += amt;
       }
     }
 
-    const currentBalance = STARTING_BALANCE + totalInflow - totalOutflow;
+    const currentBalance = startingBalance + totalInflow - totalOutflow;
     const heldTransactions = transactions.filter(t => t.status === 'HELD_FOR_REVIEW');
     const blockedTransactions = transactions.filter(t => t.status === 'BLOCKED');
     const verifiedTransactions = transactions.filter(t => t.status === 'VERIFIED');
 
     return {
-      startingBalance: STARTING_BALANCE,
+      startingBalance,
       currentBalance,
       totalInflow,
       totalOutflow,
@@ -269,16 +211,16 @@ export function WalletProvider({ children }) {
       heldTransactions,
       blockedTransactions,
       verifiedTransactions,
-      // Mathematical integrity assertion flag
-      isReconciled: (STARTING_BALANCE + totalInflow - totalOutflow) === currentBalance
+      isReconciled: (startingBalance + totalInflow - totalOutflow) === currentBalance
     };
-  }, [transactions]);
+  }, [transactions, currentUser]);
 
-  // Submit and screen new transaction
+  // Submit and screen new transaction for the active user
   const submitTransaction = useCallback(async (txInput) => {
     const scored = scoreTransaction(txInput);
     const newTx = {
       id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId: currentUser.id,
       direction: txInput.direction,
       amount: Number(txInput.amount),
       counterparty: txInput.counterparty.trim(),
@@ -293,43 +235,105 @@ export function WalletProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
+    // Update active user state & storage
     setTransactions(prev => [newTx, ...prev]);
     await storageService.saveNewTransaction(newTx);
+
+    // Live Two-Way P2P: If sending money to another registered user in our system!
+    if (newTx.direction === 'OUT' && newTx.status === 'VERIFIED') {
+      const recipientProfile = profiles.find(
+        p => p.upiId.toLowerCase() === newTx.counterparty.toLowerCase() && p.id !== currentUser.id
+      );
+
+      if (recipientProfile) {
+        const mirrorCreditTx = {
+          id: `tx_p2p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          userId: recipientProfile.id,
+          direction: 'IN',
+          amount: newTx.amount,
+          counterparty: currentUser.upiId,
+          category: 'Transfer',
+          message: newTx.message || `Transfer from ${currentUser.fullName}`,
+          riskScore: 5,
+          riskLevel: 'SAFE',
+          status: 'VERIFIED',
+          reasons: [`Verified P2P transfer received from ${currentUser.fullName} (${currentUser.upiId})`],
+          reasonsKn: [`${currentUser.fullName} ಅವರಿಂದ ದೃಢೀಕರಿಸಿದ ನೇರ ವರ್ಗಾವಣೆ ಸ್ವೀಕರಿಸಲಾಗಿದೆ.`],
+          isCollectRequest: false,
+          createdAt: new Date().toISOString()
+        };
+        await storageService.saveNewTransaction(mirrorCreditTx);
+      }
+    }
 
     if (newTx.status === 'HELD_FOR_REVIEW') {
       showToast(
         language === 'kn'
           ? 'ವಹಿವಾಟು ತಡೆಹಿಡಿಯಲಾಗಿದೆ! ಕುಟುಂಬ ಪರಿಶೀಲನಾ ಸರದಿಗೆ ಕಳುಹಿಸಲಾಗಿದೆ.'
-          : 'High risk detected! Transaction HELD in Family Review Queue.',
+          : 'Suspicious payment held! Sent to Family Review Queue.',
         'warning'
       );
     } else {
       showToast(
         language === 'kn'
-          ? 'ವಹಿವಾಟು ದೃಢೀಕರಿಸಲಾಗಿದೆ ಮತ್ತು ಬ್ಯಾಲೆನ್ಸ್‌ಗೆ ನಮೂದಿಸಲಾಗಿದೆ.'
-          : 'Transaction Verified and reconciled into wallet balance.',
+          ? 'ಪಾವತಿ ಯಶಸ್ವಿಯಾಗಿದೆ ಮತ್ತು ಲೆಡ್ಜರ್‌ಗೆ ನಮೂದಿಸಲಾಗಿದೆ.'
+          : 'Payment verified and reconciled with wallet balance.',
         'success'
       );
     }
 
     return newTx;
-  }, [language, showToast]);
+  }, [currentUser, profiles, language, showToast]);
 
   // Approve a transaction currently held for review
   const approveHeldTransaction = useCallback(async (id) => {
+    let approvedTx = null;
     setTransactions(prev => 
-      prev.map(tx => tx.id === id ? { ...tx, status: 'VERIFIED' } : tx)
+      prev.map(tx => {
+        if (tx.id === id) {
+          approvedTx = { ...tx, status: 'VERIFIED' };
+          return approvedTx;
+        }
+        return tx;
+      })
     );
-    await storageService.updateTransactionStatus(id, 'VERIFIED');
+    await storageService.updateTransactionStatus(currentUser.id, id, 'VERIFIED');
+
+    // If it was a P2P transfer, credit recipient now that it is approved!
+    if (approvedTx && approvedTx.direction === 'OUT') {
+      const recipientProfile = profiles.find(
+        p => p.upiId.toLowerCase() === approvedTx.counterparty.toLowerCase() && p.id !== currentUser.id
+      );
+      if (recipientProfile) {
+        const mirrorCreditTx = {
+          id: `tx_p2p_appr_${Date.now()}`,
+          userId: recipientProfile.id,
+          direction: 'IN',
+          amount: approvedTx.amount,
+          counterparty: currentUser.upiId,
+          category: 'Transfer',
+          message: approvedTx.message || `Transfer from ${currentUser.fullName}`,
+          riskScore: 5,
+          riskLevel: 'SAFE',
+          status: 'VERIFIED',
+          reasons: [`Approved transfer from ${currentUser.fullName}`],
+          reasonsKn: [`${currentUser.fullName} ಅವರಿಂದ ಅನುಮೋದಿತ ವರ್ಗಾವಣೆ.`],
+          isCollectRequest: false,
+          createdAt: new Date().toISOString()
+        };
+        await storageService.saveNewTransaction(mirrorCreditTx);
+      }
+    }
+
     showToast(
       language === 'kn'
         ? 'ವಹಿವಾಟು ಅನುಮೋದಿಸಲಾಗಿದೆ ಮತ್ತು ಲೆಡ್ಜರ್ ಅಪ್‌ಡೇಟ್ ಆಗಿದೆ.'
-        : 'Transaction Approved! Reconciled into wallet balance.',
+        : 'Payment Approved! Reconciled with wallet balance.',
       'success'
     );
-  }, [language, showToast]);
+  }, [currentUser, profiles, language, showToast]);
 
-  // Block a transaction currently held for review
+  // Block a held transaction
   const blockHeldTransaction = useCallback(async (id) => {
     let savedAmount = 0;
     setTransactions(prev => 
@@ -341,34 +345,33 @@ export function WalletProvider({ children }) {
         return tx;
       })
     );
-    await storageService.updateTransactionStatus(id, 'BLOCKED');
+    await storageService.updateTransactionStatus(currentUser.id, id, 'BLOCKED');
     showToast(
       language === 'kn'
-        ? `ವಂಚನೆ ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ! ₹${savedAmount.toLocaleString('en-IN')} ಸುರಕ್ಷಿತವಾಗಿ ಉಳಿಸಲಾಗಿದೆ.`
-        : `Scam Blocked! ₹${savedAmount.toLocaleString('en-IN')} successfully protected.`,
+        ? `ವಂಚನೆ ತಡೆಯಲಾಗಿದೆ! ₹${savedAmount.toLocaleString('en-IN')} ಸುರಕ್ಷಿತವಾಗಿ ಉಳಿಸಲಾಗಿದೆ.`
+        : `Scam Blocked! ₹${savedAmount.toLocaleString('en-IN')} protected from fraud.`,
       'error'
     );
-  }, [language, showToast]);
+  }, [currentUser.id, language, showToast]);
 
-  // Reset demo to default initial seed transactions
+  // Reset demo transactions for current active user
   const resetDemoData = useCallback(async () => {
-    const fresh = await storageService.resetData(INITIAL_TRANSACTIONS);
+    const fresh = await storageService.resetUserTransactions(currentUser.id);
     setTransactions(fresh);
     showToast(
       language === 'kn'
-        ? 'ಡೆಮೊ ಡೇಟಾವನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಮರುಹೊಂದಿಸಲಾಗಿದೆ.'
-        : 'Demo data reset to initial benchmark state.',
+        ? 'ಡೆಮೊ ಡೇಟಾ ಮರುಹೊಂದಿಸಲಾಗಿದೆ.'
+        : `Reset ${currentUser.fullName}'s wallet to default state.`,
       'info'
     );
-  }, [language, showToast]);
+  }, [currentUser, language, showToast]);
 
-  // Trigger PWA install
   const promptInstall = useCallback(async () => {
     if (!installPrompt) {
       showToast(
         language === 'kn'
-          ? 'ಬ್ರೌಸರ್ ಮೆನುವಿನಿಂದ "ಆ್ಯಪ್ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ" ಅಥವಾ "ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ಗೆ ಸೇರಿಸಿ" ಆಯ್ಕೆಮಾಡಿ.'
-          : 'To install, tap the Share or Browser menu and select "Add to Home Screen".',
+          ? 'ಬ್ರೌಸರ್ ಮೆನುವಿನಿಂದ "ಆ್ಯಪ್ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ" ಆಯ್ಕೆಮಾಡಿ.'
+          : 'To install, open browser menu and tap "Add to Home Screen".',
         'info'
       );
       return;
@@ -384,6 +387,13 @@ export function WalletProvider({ children }) {
   const t = translations[language] || translations.en;
 
   const value = {
+    profiles,
+    currentUser,
+    currentUserId,
+    isAuthenticated,
+    loginAsUser,
+    logout,
+    sendEmailVerification,
     transactions,
     language,
     toggleLanguage,
@@ -399,7 +409,9 @@ export function WalletProvider({ children }) {
     submitTransaction,
     approveHeldTransaction,
     blockHeldTransaction,
-    resetDemoData
+    resetDemoData,
+    isProfileModalOpen,
+    setIsProfileModalOpen
   };
 
   return (

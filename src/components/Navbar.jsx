@@ -1,32 +1,31 @@
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
-  Wifi, 
-  WifiOff, 
   Download, 
   Languages, 
   RotateCcw, 
-  ShieldAlert, 
   Clock, 
   BarChart3, 
-  Info,
   X,
-  CreditCard
+  CreditCard,
+  User,
+  ChevronDown
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
 export default function Navbar() {
   const { 
+    currentUser, 
     language, 
     toggleLanguage, 
     t, 
-    isOnline, 
     activeTab, 
     setActiveTab, 
     computedMetrics, 
     promptInstall, 
     isInstalled, 
-    resetDemoData 
+    resetDemoData, 
+    setIsProfileModalOpen 
   } = useWallet();
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -71,29 +70,34 @@ export default function Navbar() {
         </aside>
       )}
 
-      {/* 2. Main Navigation Bar */}
+      {/* 2. Main PhonePe-Style Header */}
       <header className="bg-slate-900/95 border-b border-slate-800/80 sticky top-0 z-40 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-3">
             
-            {/* App Brand */}
+            {/* Left: PhonePe-Style Profile Button */}
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                    {t.appName}
-                  </h1>
-                  <span className="hidden lg:inline-block text-[10px] font-medium text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60">
-                    {t.securityBadge}
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(true)}
+                className="flex items-center gap-2.5 p-1 pr-2.5 rounded-2xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 transition text-left cursor-pointer group"
+                title="Open Profile & Bank Details"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-slate-950 font-black text-sm flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
+                  {currentUser?.avatarInitials || 'U'}
+                </div>
+                <div className="hidden min-[400px]:block">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-white leading-tight">
+                      {currentUser?.fullName}
+                    </span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition" />
+                  </div>
+                  <span className="text-[10px] text-slate-400 block font-mono leading-none">
+                    {currentUser?.upiId}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400 hidden sm:block">
-                  {t.tagline}
-                </p>
-              </div>
+              </button>
             </div>
 
             {/* Desktop Navigation Tabs */}
@@ -146,7 +150,7 @@ export default function Navbar() {
               {/* Wallet Balance Card */}
               <div 
                 onClick={() => setActiveTab('dashboard')}
-                className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center gap-2.5 transition"
+                className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5 flex items-center gap-2 transition"
                 title="Wallet Balance"
               >
                 <div className="w-6 h-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-400">
@@ -166,7 +170,7 @@ export default function Navbar() {
               {!isInstalled && (
                 <button
                   onClick={promptInstall}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/80 transition"
+                  className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/80 transition"
                   title="Install Progressive Web App"
                 >
                   <Download className="w-3.5 h-3.5 text-slate-400" />
@@ -177,7 +181,7 @@ export default function Navbar() {
               {/* Language Switcher */}
               <button
                 onClick={toggleLanguage}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition"
                 title="Switch Language / ಭಾಷೆ ಬದಲಿಸಿ"
               >
                 <Languages className="w-3.5 h-3.5 text-slate-400" />

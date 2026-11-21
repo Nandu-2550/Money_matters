@@ -4,15 +4,25 @@ import Navbar from './components/Navbar';
 import ScannerSimulator from './components/ScannerSimulator';
 import ReviewQueue from './components/ReviewQueue';
 import MoneyFlowDashboard from './components/MoneyFlowDashboard';
+import LoginScreen from './components/LoginScreen';
+import ProfileModal from './components/ProfileModal';
 import { ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 
 function MainApp() {
-  const { activeTab, notification, language, t } = useWallet();
+  const { activeTab, notification, language, isAuthenticated } = useWallet();
+
+  // If user is not yet verified or logged in, show PhonePe login screen
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-20 md:pb-8 selection:bg-slate-700">
       {/* Top Navbar */}
       <Navbar />
+
+      {/* Profile & Linked Bank Drawer Modal */}
+      <ProfileModal />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -37,7 +47,7 @@ function MainApp() {
         </div>
       )}
 
-      {/* Realistic Minimal Footer */}
+      {/* Minimal Footer */}
       <footer className="border-t border-slate-900 py-6 text-xs text-slate-400">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2 text-slate-400">

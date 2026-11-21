@@ -7,17 +7,30 @@ import {
   AlertCircle, 
   CheckCircle2, 
   ArrowRight,
-  HelpCircle,
   Store,
   Smartphone,
   TrendingUp,
   Landmark,
-  ExternalLink
+  QrCode,
+  CreditCard,
+  Send,
+  Link as LinkIcon,
+  X,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
 export default function ScannerSimulator() {
-  const { language, t, submitTransaction, setActiveTab } = useWallet();
+  const { 
+    currentUser, 
+    profiles, 
+    language, 
+    t, 
+    submitTransaction, 
+    setActiveTab, 
+    setIsProfileModalOpen 
+  } = useWallet();
 
   const [direction, setDirection] = useState('OUT'); // 'IN' | 'OUT'
   const [counterparty, setCounterparty] = useState('');
@@ -29,7 +42,52 @@ export default function ScannerSimulator() {
   const [isScanning, setIsScanning] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Quick Scenarios (Clean & Realistic)
+  // Modals for PhonePe-style quick actions
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  // Identify counterpart contact (Anjaneya if Nandeesh, Nandeesh if Anjaneya)
+  const peerContact = profiles.find(p => p.id !== currentUser.id) || profiles[1];
+
+  // Quick Action Buttons Handlers
+  const handleActionToMobile = () => {
+    setDirection('OUT');
+    setIsCollectRequest(false);
+    setScanResult(null);
+    setFormError('');
+  };
+
+  const handleActionReceive = () => {
+    setShowQrModal(true);
+  };
+
+  const handleActionCheckBalance = () => {
+    setIsProfileModalOpen(true);
+  };
+
+  const handleActionScamScanner = () => {
+    setDirection('OUT');
+    setCategory('Investment');
+    setCounterparty('vip.trading@okaxis');
+    setAmount('10000');
+    setMessage('Guaranteed 50% weekly return VIP stocks group download http://vipstocks.xyz/bonus.apk');
+    setScanResult(null);
+    setFormError('');
+  };
+
+  // 1-Click Peer-to-Peer Transfer Handler
+  const handleQuickP2P = (peer) => {
+    setDirection('OUT');
+    setCounterparty(peer.upiId);
+    setAmount('1000');
+    setCategory('Transfer');
+    setMessage(`Transfer to ${peer.fullName}`);
+    setIsCollectRequest(false);
+    setScanResult(null);
+    setFormError('');
+  };
+
+  // Quick Scenarios
   const handleApplyPreset = (presetNumber) => {
     setFormError('');
     setScanResult(null);
@@ -103,10 +161,103 @@ export default function ScannerSimulator() {
     }, 350);
   };
 
+  const copyUpiText = () => {
+    navigator.clipboard.writeText(currentUser.upiId);
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2000);
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       
-      {/* Top Header Card */}
+      {/* 1. PhonePe-Style 4-Icon Action Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
+        <div className="grid grid-cols-4 gap-2 sm:gap-4 text-center">
+          
+          {/* Action 1: To Mobile / UPI */}
+          <button
+            type="button"
+            onClick={handleActionToMobile}
+            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {t.quickActions.toMobile}
+            </span>
+          </button>
+
+          {/* Action 2: Receive Money / QR */}
+          <button
+            type="button"
+            onClick={handleActionReceive}
+            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <QrCode className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {t.quickActions.receiveQr}
+            </span>
+          </button>
+
+          {/* Action 3: Check Bank Balance */}
+          <button
+            type="button"
+            onClick={handleActionCheckBalance}
+            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {t.quickActions.checkBalance}
+            </span>
+          </button>
+
+          {/* Action 4: Scam & Link Scanner */}
+          <button
+            type="button"
+            onClick={handleActionScamScanner}
+            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {t.quickActions.linkScanner}
+            </span>
+          </button>
+
+        </div>
+
+        {/* 1-Click P2P Transfer Banner (e.g. Nandeesh -> Anjaneya or Anjaneya -> Nandeesh) */}
+        {peerContact && (
+          <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-slate-800 text-xs font-bold text-white flex items-center justify-center shrink-0">
+                {peerContact.avatarInitials}
+              </div>
+              <div className="text-xs">
+                <span className="text-slate-400 block">{t.quickActions.quickP2PTitle}:</span>
+                <span className="font-semibold text-slate-200">{peerContact.fullName} ({peerContact.upiId})</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleQuickP2P(peerContact)}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{t.quickActions.sendToContact.replace('{name}', peerContact.fullName).replace('{upi}', peerContact.upiId)}</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Top Header Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -162,12 +313,10 @@ export default function ScannerSimulator() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-            
-            {/* Preset 1 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(1)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Store className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -180,11 +329,10 @@ export default function ScannerSimulator() {
               </p>
             </button>
 
-            {/* Preset 2 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(2)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
@@ -197,11 +345,10 @@ export default function ScannerSimulator() {
               </p>
             </button>
 
-            {/* Preset 3 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(3)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <TrendingUp className="w-4 h-4 text-rose-400 shrink-0" />
@@ -214,11 +361,10 @@ export default function ScannerSimulator() {
               </p>
             </button>
 
-            {/* Preset 4 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(4)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Landmark className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -234,7 +380,7 @@ export default function ScannerSimulator() {
         </div>
       </div>
 
-      {/* Main Form & Result Layout */}
+      {/* 3. Main Form & Result Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Form Container */}
@@ -274,7 +420,7 @@ export default function ScannerSimulator() {
                 <p className="text-[11px] text-slate-400 mt-1">
                   {language === 'kn'
                     ? 'ಅಧಿಕೃತ SEBI ಹೂಡಿಕೆ ಬ್ರೋಕರ್‌ಗಳು .brk@valid* ಅಥವಾ .mf@valid* ಹ್ಯಾಂಡಲ್ ಬಳಸುತ್ತಾರೆ.'
-                    : 'Regulated SEBI brokers use official .brk@valid* or .mf@valid* handles.'}
+                    : 'Tip: Regulated SEBI brokers use official .brk@valid* or .mf@valid* handles.'}
                 </p>
               )}
             </div>
@@ -307,13 +453,13 @@ export default function ScannerSimulator() {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2.5 text-sm text-white outline-none transition"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition"
                 >
                   <option value="Investment">{t.categories.Investment}</option>
+                  <option value="Transfer">{t.categories.Transfer}</option>
                   <option value="Retail">{t.categories.Retail}</option>
                   <option value="Business">{t.categories.Business}</option>
                   <option value="Utilities">{t.categories.Utilities}</option>
-                  <option value="Transfer">{t.categories.Transfer}</option>
                   <option value="Emergency">{t.categories.Emergency}</option>
                   <option value="Salary">{t.categories.Salary}</option>
                   <option value="Other">{t.categories.Other}</option>
@@ -378,7 +524,7 @@ export default function ScannerSimulator() {
           </form>
         </div>
 
-        {/* Right: Security Result Card */}
+        {/* Security Result Card */}
         <div className="lg:col-span-5 flex flex-col">
           {scanResult ? (
             <div className={`h-full rounded-2xl p-5 sm:p-6 border shadow-sm flex flex-col justify-between ${
@@ -387,8 +533,6 @@ export default function ScannerSimulator() {
                 : 'bg-slate-900 border-emerald-500/30'
             }`}>
               <div>
-                
-                {/* Result Top */}
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                   <div className="flex items-center gap-2">
                     {scanResult.status === 'HELD_FOR_REVIEW' ? (
@@ -409,7 +553,6 @@ export default function ScannerSimulator() {
                   </span>
                 </div>
 
-                {/* Score & Evaluation */}
                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 mb-4 flex items-center gap-4">
                   <div className="w-14 h-14 rounded-full bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shrink-0">
                     <span className="text-base font-bold text-white leading-none">{scanResult.riskScore}</span>
@@ -425,7 +568,6 @@ export default function ScannerSimulator() {
                   </div>
                 </div>
 
-                {/* Detected Details */}
                 <div className="space-y-2">
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                     {t.scanner.reasonsTitle}
@@ -444,7 +586,6 @@ export default function ScannerSimulator() {
                 </div>
               </div>
 
-              {/* Bottom Actions */}
               <div className="mt-5 pt-3 border-t border-slate-800">
                 {scanResult.status === 'HELD_FOR_REVIEW' ? (
                   <button
@@ -480,14 +621,88 @@ export default function ScannerSimulator() {
               </h4>
               <p className="text-xs text-slate-400 max-w-xs">
                 {language === 'kn'
-                  ? 'ಮೇಲಿನ ಪರೀಕ್ಷಾ ಮಾದರಿಗಳನ್ನು ಬಳಸಿ ಅಥವಾ ಹೊಸ ಪಾವತಿ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಪರಿಶೀಲಿಸಿ.'
-                  : 'Select a test scenario above or enter UPI payment details to verify safety.'}
+                  ? 'ಮೇಲಿನ ತ್ವರಿತ ಆಯ್ಕೆಗಳನ್ನು ಬಳಸಿ ಅಥವಾ ಹೊಸ ಪಾವತಿ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಪರಿಶೀಲಿಸಿ.'
+                  : 'Select an action above or enter UPI payment details to verify safety.'}
               </p>
             </div>
           )}
         </div>
 
       </div>
+
+      {/* Receive Money / QR Code Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setShowQrModal(false)}
+              className="absolute right-4 top-4 p-1 rounded-full bg-slate-800 text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight">
+                {t.quickActions.qrModalTitle}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {currentUser.fullName} • {currentUser.bankName}
+              </p>
+            </div>
+
+            {/* Clean SVG QR Code Representation */}
+            <div className="bg-white p-4 rounded-2xl inline-block mx-auto shadow-inner">
+              <svg className="w-48 h-48" viewBox="0 0 100 100" fill="none">
+                <rect width="100" height="100" fill="#ffffff" />
+                {/* Outer corners */}
+                <rect x="10" y="10" width="25" height="25" rx="3" stroke="#0f172a" strokeWidth="4" />
+                <rect x="16" y="16" width="13" height="13" fill="#0f172a" />
+                
+                <rect x="65" y="10" width="25" height="25" rx="3" stroke="#0f172a" strokeWidth="4" />
+                <rect x="71" y="16" width="13" height="13" fill="#0f172a" />
+                
+                <rect x="10" y="65" width="25" height="25" rx="3" stroke="#0f172a" strokeWidth="4" />
+                <rect x="16" y="71" width="13" height="13" fill="#0f172a" />
+                
+                {/* QR Data Pattern Blocks */}
+                <rect x="42" y="12" width="6" height="6" fill="#0f172a" />
+                <rect x="52" y="12" width="6" height="12" fill="#0f172a" />
+                <rect x="42" y="24" width="16" height="6" fill="#0f172a" />
+                <rect x="12" y="42" width="6" height="16" fill="#0f172a" />
+                <rect x="24" y="42" width="12" height="6" fill="#0f172a" />
+                <rect x="24" y="52" width="6" height="6" fill="#0f172a" />
+                <rect x="42" y="42" width="16" height="16" fill="#10b981" />
+                <rect x="65" y="42" width="10" height="6" fill="#0f172a" />
+                <rect x="80" y="42" width="10" height="16" fill="#0f172a" />
+                <rect x="65" y="52" width="8" height="16" fill="#0f172a" />
+                <rect x="42" y="65" width="8" height="10" fill="#0f172a" />
+                <rect x="55" y="65" width="10" height="8" fill="#0f172a" />
+                <rect x="42" y="80" width="16" height="8" fill="#0f172a" />
+                <rect x="65" y="80" width="12" height="8" fill="#0f172a" />
+                <rect x="82" y="74" width="8" height="14" fill="#0f172a" />
+              </svg>
+            </div>
+
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+              <span className="font-mono text-xs font-bold text-slate-200 truncate">
+                {currentUser.upiId}
+              </span>
+              <button
+                onClick={copyUpiText}
+                className="p-1 px-2 rounded-lg bg-slate-800 text-slate-300 text-xs flex items-center gap-1 hover:text-white"
+              >
+                {copiedUpi ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-500">
+              {t.quickActions.qrModalDesc}
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

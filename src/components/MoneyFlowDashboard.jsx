@@ -24,7 +24,7 @@ import {
   Pie, 
   Cell 
 } from 'recharts';
-import { useWallet, STARTING_BALANCE } from '../context/WalletContext';
+import { useWallet } from '../context/WalletContext';
 
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
 
@@ -173,7 +173,7 @@ export default function MoneyFlowDashboard() {
         <div className="flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="font-mono text-[11px] text-slate-300">
-            {`₹${STARTING_BALANCE.toLocaleString('en-IN')} + ₹${computedMetrics.totalInflow.toLocaleString('en-IN')} - ₹${computedMetrics.totalOutflow.toLocaleString('en-IN')} = ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`}
+            {`₹${(computedMetrics.startingBalance || 25000).toLocaleString('en-IN')} + ₹${computedMetrics.totalInflow.toLocaleString('en-IN')} - ₹${computedMetrics.totalOutflow.toLocaleString('en-IN')} = ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`}
           </span>
         </div>
         <span className="text-[11px] text-slate-400">
