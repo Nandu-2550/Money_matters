@@ -142,6 +142,15 @@ export function WalletProvider({ children }) {
     };
   }, [showToast]);
 
+  // Direct login as user
+  const loginAsUser = useCallback((userId) => {
+    setCurrentUserId(userId);
+    setIsAuthenticated(true);
+    localStorage.setItem(AUTH_USER_KEY, userId);
+    storageService.setActiveUserId(userId);
+    storageService.loadUserTransactions(userId).then(setTransactions);
+  }, []);
+
   const profilesRef = useRef(profiles);
   useEffect(() => {
     profilesRef.current = profiles;
@@ -210,15 +219,6 @@ export function WalletProvider({ children }) {
       localStorage.setItem('mm_lang', next);
       return next;
     });
-  }, []);
-
-  // Direct login as user
-  const loginAsUser = useCallback((userId) => {
-    setCurrentUserId(userId);
-    setIsAuthenticated(true);
-    localStorage.setItem(AUTH_USER_KEY, userId);
-    storageService.setActiveUserId(userId);
-    storageService.loadUserTransactions(userId).then(setTransactions);
   }, []);
 
   // Password / MPIN login verification
