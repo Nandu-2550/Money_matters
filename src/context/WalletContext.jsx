@@ -364,7 +364,7 @@ export function WalletProvider({ children }) {
     const phoneDigits = raw.replace(/\D/g, '');
 
     // Search user by email, phone, or UPI/wallet ID
-    const matched = profiles.find(p => {
+    let matched = profiles.find(p => {
       const pEmail = (p.email || '').toLowerCase();
       const pUpi = (p.upiId || '').toLowerCase();
       const pWallet = (p.walletId || '').toLowerCase();
@@ -376,15 +376,38 @@ export function WalletProvider({ children }) {
     });
 
     if (!matched) {
-      return {
-        success: false,
-        error: language === 'kn'
-          ? 'ಈ ಇಮೇಲ್ ಅಥವಾ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯೊಂದಿಗೆ ಖಾತೆ ಕಂಡುಬಂದಿಲ್ಲ. ದಯವಿಟ್ಟು ಮೊದಲು ನೋಂದಾಯಿಸಿ.'
-          : 'No account found with this Email or Mobile Number. Please register below first.'
-      };
+      // If user typed an email, auto-create their Safe-Wallet profile so they can log in via live OTP
+      if (cleanId.includes('@') && cleanId.includes('.')) {
+        const prefix = cleanId.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'user';
+        const autoProfile = {
+          id: `usr_${Date.now()}`,
+          fullName: prefix.charAt(0).toUpperCase() + prefix.slice(1),
+          email: cleanId,
+          walletId: `${prefix}@mmwallet`,
+          upiId: `${prefix}@mmwallet`,
+          phone: phoneDigits.length >= 10 ? raw : '+91 98765 00000',
+          bankName: 'Safe-Wallet Vault',
+          accountLast4: '8800',
+          startingBalance: 5000,
+          avatarInitials: prefix.charAt(0).toUpperCase(),
+          password: '1234',
+          demoPin: '0000',
+          createdAt: new Date().toISOString()
+        };
+        const saved = await storageService.createProfile(autoProfile);
+        setProfiles(prev => [...prev, saved]);
+        matched = saved;
+      } else {
+        return {
+          success: false,
+          error: language === 'kn'
+            ? 'ಈ ಇಮೇಲ್ ಅಥವಾ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯೊಂದಿಗೆ ಖಾತೆ ಕಂಡುಬಂದಿಲ್ಲ. ದಯವಿಟ್ಟು ಮೊದಲು ನೋಂದಾಯಿಸಿ.'
+            : 'No account found with this Mobile Number. Please register below or enter your Email.'
+        };
+      }
     }
 
-    // Generate authentic 6-digit OTP
+    // Generate fallback 6-digit OTP for resilient offline/sandbox mode
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const newSession = {
       userId: matched.id,
@@ -401,34 +424,61 @@ export function WalletProvider({ children }) {
       localStorage.setItem('mm_active_otp_session', JSON.stringify(newSession));
     } catch {}
 
-    // Dispatch via Supabase Auth in background if available
-    if (isSupabaseConfigured && supabase) {
-      supabase.auth.signInWithOtp({
-        email: matched.email,
-        options: { emailRedirectTo: window.location.origin }
-      }).catch(err => {
-        console.warn('[Supabase OTP] Cloud delivery deferred:', err?.message || err);
-      });
+    // Dispatch REAL LIVE verification email via Supabase Auth
+    let liveEmailSent = false;
+    let liveError = null;
+
+    if (isSupabaseConfigured && supabase && matched.email) {
+      try {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: matched.email.trim(),
+          options: {
+            emailRedirectTo: window.location.origin,
+            shouldCreateUser: true
+          }
+        });
+        if (!error) {
+          liveEmailSent = true;
+          console.log('[MoneyMatters] Live verification email dispatched via Supabase Custom SMTP to:', matched.email);
+        } else {
+          liveError = error.message;
+          console.warn('[MoneyMatters] Supabase signInWithOtp note:', error.message);
+        }
+      } catch (err) {
+        liveError = err?.message || String(err);
+        console.warn('[MoneyMatters] Supabase signInWithOtp exception:', err);
+      }
     }
 
-    showToast(
-      language === 'kn'
-        ? `ಪರಿಶೀಲನಾ OTP: ${generatedOtp} (${matched.email} ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ)`
-        : `Verification OTP: ${generatedOtp} (Sent to ${matched.email})`,
-      'success'
-    );
+    if (liveEmailSent) {
+      showToast(
+        language === 'kn'
+          ? `ಲೈವ್ ಪರಿಶೀಲನಾ OTP ಅನ್ನು ${matched.email} ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ! ನಿಮ್ಮ ಇನ್‌ಬಾಕ್ಸ್ ಪರಿಶೀಲಿಸಿ.`
+          : `Live verification OTP sent to ${matched.email}! Please check your inbox.`,
+        'success'
+      );
+    } else {
+      showToast(
+        language === 'kn'
+          ? `ಪರಿಶೀಲನಾ ಕೋಡ್: ${generatedOtp} (${matched.email} ಗೆ)`
+          : `Verification code: ${generatedOtp} (${matched.email})`,
+        'success'
+      );
+    }
 
     return {
       success: true,
       email: matched.email,
       phone: matched.phone || raw,
       fullName: matched.fullName,
-      otp: generatedOtp
+      otp: generatedOtp,
+      liveEmailSent,
+      liveError
     };
   }, [profiles, language, showToast]);
 
-  // Verify Email OTP and Log In
-  const verifyEmailOtp = useCallback((identifier, inputOtp) => {
+  // Verify Email OTP and Log In (Validates real live Supabase OTP token or fallback)
+  const verifyEmailOtp = useCallback(async (identifier, inputOtp) => {
     const raw = (identifier || '').trim();
     const cleanId = raw.toLowerCase();
     const phoneDigits = raw.replace(/\D/g, '');
@@ -459,6 +509,26 @@ export function WalletProvider({ children }) {
       };
     }
 
+    // 1. Attempt verifying the real live OTP token via Supabase Auth
+    let supabaseVerified = false;
+    if (isSupabaseConfigured && supabase && matched.email) {
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: matched.email.trim(),
+          token: cleanOtp,
+          type: 'email'
+        });
+        if (!error && (data?.session || data?.user)) {
+          supabaseVerified = true;
+          console.log('[MoneyMatters] Supabase live email OTP verified successfully!');
+        } else if (error) {
+          console.warn('[MoneyMatters] Supabase verifyOtp note:', error.message);
+        }
+      } catch (err) {
+        console.warn('[MoneyMatters] Supabase verifyOtp exception:', err);
+      }
+    }
+
     let session = activeOtpSession;
     if (!session) {
       try {
@@ -467,15 +537,18 @@ export function WalletProvider({ children }) {
       } catch {}
     }
 
-    const isMatch = (session && session.userId === matched.id && session.otp === cleanOtp && Date.now() < session.expiresAt) ||
-      cleanOtp === '123456' || cleanOtp === (matched.password || '1234') || cleanOtp === (matched.demoPin || '1234');
+    const isMatch = supabaseVerified ||
+      (session && session.userId === matched.id && session.otp === cleanOtp && Date.now() < session.expiresAt) ||
+      cleanOtp === '123456' ||
+      cleanOtp === (matched.password || '1234') ||
+      cleanOtp === (matched.demoPin || '1234');
 
     if (!isMatch) {
       return {
         success: false,
         error: language === 'kn'
-          ? 'ತಪ್ಪಾದ ಅಥವಾ ಮುಕ್ತಾಯಗೊಂಡ OTP ಕೋಡ್. ದಯವಿಟ್ಟು ಸರಿಯಾದ ಕೋಡ್ ನಮೂದಿಸಿ.'
-          : 'Invalid or expired OTP code. Please enter the correct 6-digit code.'
+          ? 'ತಪ್ಪಾದ ಅಥವಾ ಮುಕ್ತಾಯಗೊಂಡ OTP ಕೋಡ್. ದಯವಿಟ್ಟು ಇಮೇಲ್‌ನಲ್ಲಿ ಬಂದ ಸರಿಯಾದ ಕೋಡ್ ನಮೂದಿಸಿ.'
+          : 'Invalid or expired OTP code. Please enter the correct code from your email.'
       };
     }
 

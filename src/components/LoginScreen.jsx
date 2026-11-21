@@ -100,7 +100,12 @@ export default function LoginScreen() {
     if (res.success) {
       setSentDetails(res);
       setLoginStep('otp');
-      setInputOtp(res.otp || '');
+      // If real live email was dispatched, keep input field clean for the user's incoming email OTP
+      if (res.liveEmailSent) {
+        setInputOtp('');
+      } else {
+        setInputOtp(res.otp || '');
+      }
       setResendCooldown(30);
     } else {
       setErrorMessage(res.error || 'Failed to send OTP. Please check your details or try MPIN login.');
@@ -123,7 +128,7 @@ export default function LoginScreen() {
     }
 
     setIsSubmitting(true);
-    const res = verifyEmailOtp(loginIdentifier, cleanOtp);
+    const res = await verifyEmailOtp(loginIdentifier, cleanOtp);
     setIsSubmitting(false);
 
     if (!res.success) {
@@ -334,25 +339,41 @@ export default function LoginScreen() {
                     )}
                   </div>
 
-                  {/* Verification OTP Display */}
-                  {(sentDetails?.otp || activeOtpSession?.otp) && (
-                    <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between text-left gap-2">
-                      <div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
-                          {language === 'kn' ? 'ಪರಿಶೀಲನಾ OTP' : 'Verification OTP'}
-                        </span>
-                        <span className="text-lg font-bold font-mono tracking-widest text-emerald-400">
-                          {sentDetails?.otp || activeOtpSession?.otp}
+                  {/* Live Email Notification or Sandbox Fallback Banner */}
+                  {sentDetails?.liveEmailSent ? (
+                    <div className="bg-emerald-500/10 p-3.5 rounded-2xl border border-emerald-500/30 text-left space-y-1.5 animate-fadeIn">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-xs font-bold text-emerald-300">
+                          {language === 'kn' ? 'ಲೈವ್ ಇಮೇಲ್ OTP ರವಾನಿಸಲಾಗಿದೆ' : 'Live Verification Email Dispatched'}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setInputOtp(sentDetails?.otp || activeOtpSession?.otp || '')}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500 hover:text-slate-950 transition cursor-pointer shrink-0"
-                      >
-                        {language === 'kn' ? 'ಸ್ವಯಂ ನಮೂದಿಸಿ' : 'Auto-Fill'}
-                      </button>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {language === 'kn'
+                          ? `Money Matters ನಿಂದ ${sentDetails?.email || loginIdentifier} ವಿಳಾಸಕ್ಕೆ 6-ಅಂಕಿಯ OTP ಕಳುಹಿಸಲಾಗಿದೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಇನ್‌ಬಾಕ್ಸ್ ಅಥವಾ ಸ್ಪ್ಯಾಮ್ ಪರಿಶೀಲಿಸಿ.`
+                          : `A 6-digit OTP has been sent via custom SMTP to ${sentDetails?.email || loginIdentifier}. Please check your inbox (or spam folder) and enter it below.`}
+                      </p>
                     </div>
+                  ) : (
+                    (sentDetails?.otp || activeOtpSession?.otp) && (
+                      <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between text-left gap-2">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                            {language === 'kn' ? 'ಪರಿಶೀಲನಾ OTP (ಬ್ಯಾಕಪ್)' : 'Verification OTP (Backup)'}
+                          </span>
+                          <span className="text-lg font-bold font-mono tracking-widest text-emerald-400">
+                            {sentDetails?.otp || activeOtpSession?.otp}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setInputOtp(sentDetails?.otp || activeOtpSession?.otp || '')}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500 hover:text-slate-950 transition cursor-pointer shrink-0"
+                        >
+                          {language === 'kn' ? 'ಸ್ವಯಂ ನಮೂದಿಸಿ' : 'Auto-Fill'}
+                        </button>
+                      </div>
+                    )
                   )}
 
                   <form onSubmit={handleVerifyOtp} className="space-y-3.5 text-left">
