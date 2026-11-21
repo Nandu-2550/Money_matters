@@ -3,19 +3,15 @@ import {
   X, 
   Copy, 
   Check, 
-  CreditCard, 
   ShieldCheck, 
   UserCheck, 
   LogOut, 
-  Eye, 
-  EyeOff, 
   QrCode,
   KeyRound,
   Mail,
   Loader2,
   AlertCircle,
-  ArrowRight,
-  ShieldAlert
+  ArrowRight
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import ReceiveQRModal from './ReceiveQRModal';
@@ -26,7 +22,6 @@ export default function ProfileModal() {
     logout, 
     isProfileModalOpen, 
     setIsProfileModalOpen, 
-    computedMetrics, 
     language, 
     t,
     sendEmailVerification,
@@ -35,7 +30,6 @@ export default function ProfileModal() {
   } = useWallet();
 
   const [copied, setCopied] = useState(false);
-  const [showBalance, setShowBalance] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
   // PIN Reset / Change State: 'idle' | 'email_code' | 'set_pin' | 'success'
@@ -235,48 +229,6 @@ export default function ProfileModal() {
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Safe-Wallet Balance Card */}
-        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300">
-                <CreditCard className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-white block">
-                  {t.profile.walletBalanceTitle}
-                </span>
-                <span className="text-[11px] text-slate-400 block font-mono">
-                  {language === 'kn' ? 'ಡಬಲ್-ಎಂಟ್ರಿ ವಾಲೆಟ್ ಖಾತೆ' : 'Double-Entry Safe Vault'}
-                </span>
-              </div>
-            </div>
-            
-            <button
-              type="button"
-              onClick={() => setShowBalance(!showBalance)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/20 text-xs font-semibold transition cursor-pointer"
-            >
-              {showBalance ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              <span>{showBalance ? t.profile.hideBalanceBtn : t.profile.checkBalanceBtn}</span>
-            </button>
-          </div>
-
-          {showBalance && (
-            <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/20 space-y-1 animate-in fade-in duration-150">
-              <span className="text-[11px] text-slate-400 block">
-                {language === 'kn' ? 'ಲಭ್ಯವಿರುವ ಒಟ್ಟು ಬ್ಯಾಲೆನ್ಸ್' : 'Available Wallet Balance'}
-              </span>
-              <div className="text-2xl font-black text-white font-mono">
-                ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}.00
-              </div>
-              <p className="text-[10px] text-emerald-400/90 leading-tight">
-                {language === 'kn' ? '✓ 100% ದೃಢೀಕರಿಸಿದ ಪ್ರತ್ಯೇಕ ವೈಯಕ್ತಿಕ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್' : '✓ 100% Reconciled Double-Entry Vault Balance'}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Safe-Wallet Payment PIN Management Card */}
