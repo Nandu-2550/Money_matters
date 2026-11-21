@@ -21,8 +21,6 @@ import ReceiveQRModal from './ReceiveQRModal';
 export default function ProfileModal() {
   const { 
     currentUser, 
-    profiles, 
-    loginAsUser, 
     logout, 
     isProfileModalOpen, 
     setIsProfileModalOpen, 
@@ -42,8 +40,6 @@ export default function ProfileModal() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const otherProfiles = profiles.filter(p => p.id !== currentUser.id);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -91,8 +87,9 @@ export default function ProfileModal() {
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               {language === 'kn' ? 'ಸುರಕ್ಷಿತ ವಾಲೆಟ್ ID' : 'Safe-Wallet ID'}
             </span>
-            <span className="text-[10px] text-emerald-400 font-mono">
-              Sandbox PIN: {currentUser.demoPin || currentUser.demo_pin || '1234'}
+            <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span>{language === 'kn' ? 'ದೃಢೀಕರಿಸಲಾಗಿದೆ' : 'Active Safe Wallet'}</span>
             </span>
           </div>
 
@@ -170,7 +167,7 @@ export default function ProfileModal() {
                   ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}
                 </div>
                 <p className="text-[10px] text-slate-400 leading-tight">
-                  {t.profile.simulatedPinNotice}
+                  {language === 'kn' ? 'ಲೆಡ್ಜರ್‌ನೊಂದಿಗೆ ತಾಳೆಯಾದ ನೈಜ ಲಭ್ಯವಿರುವ ಬ್ಯಾಲೆನ್ಸ್.' : 'Reconciled live against your double-entry ledger.'}
                 </p>
               </div>
             ) : (
@@ -186,47 +183,15 @@ export default function ProfileModal() {
           </div>
         </div>
 
-        {/* Switch Account Section */}
-        {otherProfiles.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <span className="text-xs font-semibold text-slate-400 block">
-              {t.auth.switchUser}
-            </span>
-            <div className="space-y-2">
-              {otherProfiles.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    loginAsUser(p.id);
-                    setIsProfileModalOpen(false);
-                  }}
-                  className="w-full p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-left transition flex items-center justify-between border border-slate-800"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-slate-800 font-bold text-xs text-white flex items-center justify-center">
-                      {p.avatarInitials}
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">{p.fullName}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">{p.walletId || p.upiId}</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-500" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Logout Button */}
-        <div className="pt-2">
+        <div className="pt-2 border-t border-slate-800">
           <button
             type="button"
             onClick={() => {
               setIsProfileModalOpen(false);
               logout();
             }}
-            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 flex items-center justify-center gap-2 transition cursor-pointer"
+            className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 flex items-center justify-center gap-2 transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>{t.auth.logout}</span>

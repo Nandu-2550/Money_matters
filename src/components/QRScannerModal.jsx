@@ -16,24 +16,21 @@ import {
   FileCheck
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { QRCodeCanvas } from 'qrcode.react';
 import { useWallet } from '../context/WalletContext';
-import { verifyOfflineVoucher, isVoucherClaimed, signOfflineVoucher } from '../utils/offlineVoucher';
+import { verifyOfflineVoucher, isVoucherClaimed } from '../utils/offlineVoucher';
 
 export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaimVoucher }) {
   const { currentUser, profiles, language, t } = useWallet();
-  const [activeTab, setActiveTab] = useState('camera'); // 'camera' | 'upload' | 'demo'
+  const [activeTab, setActiveTab] = useState('camera'); // 'camera' | 'upload'
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [scanError, setScanError] = useState('');
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [claimSuccessData, setClaimSuccessData] = useState(null);
-  const [demoSampleVoucher, setDemoSampleVoucher] = useState(null);
 
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
   const isStartingRef = useRef(false);
-  const hasGeneratedDemoVoucherRef = useRef(false);
 
   const onScanSuccessRef = useRef(onScanSuccess);
   onScanSuccessRef.current = onScanSuccess;
@@ -44,30 +41,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  // Memoize other registered users for instant 1-click test cards
-  const otherUsers = useMemo(() => {
-    return profiles.filter(p => p.id !== currentUser?.id);
-  }, [profiles, currentUser?.id]);
-
   const myWalletId = currentUser?.walletId || currentUser?.upiId || 'user@mmwallet';
-
-  // Generate a pre-signed demo voucher addressed to CURRENT user ONLY when demo tab is viewed
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'demo' || hasGeneratedDemoVoucherRef.current || otherUsers.length === 0) return;
-    hasGeneratedDemoVoucherRef.current = true;
-    const sender = otherUsers[0];
-    const senderWalletId = sender.walletId || sender.upiId;
-    signOfflineVoucher({
-      tx_id: `offline_demo_${Date.now()}`,
-      from_wallet: senderWalletId,
-      to_wallet: myWalletId,
-      amount: 1500
-    }).then(v => {
-      setDemoSampleVoucher(v);
-    }).catch(err => {
-      console.warn('[Demo Voucher] Signing error:', err);
-    });
-  }, [isOpen, activeTab, otherUsers, myWalletId]);
 
   // Parse UPI or MM Wallet URI (Case-insensitive & resilient)
   const parseWalletUri = useCallback((rawText) => {
@@ -349,10 +323,10 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       setCameraActive(false);
       setCameraError(
         language === 'kn'
-          ? 'ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು "ಚಿತ್ರ ಅಪ್‌ಲೋಡ್" ಅಥವಾ "ಡೆಮೊ QR" ಬಳಸಿ.'
+          ? 'ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು "ಚಿತ್ರ ಅಪ್‌ಲೋಡ್" ಬಳಸಿ.'
           : (err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
-              ? 'Camera permission denied. Please allow camera permissions in your browser bar, or use "Upload Image" / "Demo QR".'
-              : 'Camera unavailable or not detected. Please use "Upload Image" or "Demo QR".')
+              ? 'Camera permission denied. Please allow camera permissions in your browser, or use "Upload Image".'
+              : 'Camera unavailable or not detected. Please use "Upload Image".')
       );
     } finally {
       isStartingRef.current = false;
@@ -413,7 +387,6 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     setClaimSuccessData(null);
     setScanError('');
     setCameraError('');
-    hasGeneratedDemoVoucherRef.current = false;
     onClose();
   };
 
@@ -519,19 +492,6 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                 <Upload className="w-3.5 h-3.5" />
                 <span>{language === 'kn' ? 'ಚಿತ್ರ ಅಪ್‌ಲೋಡ್' : 'Upload Image'}</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('demo')}
-                className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'demo'
-                    ? 'bg-slate-800 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>{language === 'kn' ? 'ಡೆಮೊ QR' : 'Demo QR'}</span>
-              </button>
             </div>
 
             {/* Scan Error Banner */}
@@ -571,14 +531,6 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                         >
                           <Upload className="w-3.5 h-3.5" />
                           <span>{language === 'kn' ? 'ಚಿತ್ರ ಅಪ್‌ಲೋಡ್' : 'Upload Image'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('demo')}
-                          className="px-3 py-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition flex items-center gap-1.5"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>{language === 'kn' ? 'ಡೆಮೊ QR ಕಾರ್ಡ್ಸ್' : 'Demo Cards'}</span>
                         </button>
                       </div>
                     </div>
@@ -630,171 +582,6 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                 )}
 
                 <div id="qr-file-dummy" className="w-0 h-0 overflow-hidden" />
-              </div>
-            )}
-
-            {/* MODE 3: INSTANT DEMO QR CARDS & OFFLINE VOUCHERS */}
-            {activeTab === 'demo' && (
-              <div className="space-y-3">
-                
-                {/* Section A: Offline Voucher Simulation */}
-                {demoSampleVoucher && (
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/30 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಪಾವತಿ ವೋಚರ್ (ಸಿಮ್ಯುಲೇಶನ್)' : 'Simulate Offline Payment Voucher'}</span>
-                      </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
-                        ₹{demoSampleVoucher.amount}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      {language === 'kn'
-                        ? `${demoSampleVoucher.from_wallet} ರವರಿಂದ ನಿಮಗೆ ಕಳುಹಿಸಲಾದ ಸಹಿ ಮಾಡಿದ ₹${demoSampleVoucher.amount} ವೋಚರ್ ಅನ್ನು ತಕ್ಷಣ ಜಮೆ ಮಾಡಲು ಕ್ಲಿಕ್ ಮಾಡಿ:`
-                        : `Instant test: Claim a signed ₹${demoSampleVoucher.amount} voucher from ${demoSampleVoucher.from_wallet} directly into your wallet:`}
-                    </p>
-
-                    <div className="flex items-center justify-between gap-3 pt-1">
-                      <div className="bg-white p-1 rounded-xl shrink-0 shadow">
-                        <QRCodeCanvas
-                          value={JSON.stringify(demoSampleVoucher)}
-                          size={46}
-                          level="M"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handlePayloadResult(JSON.stringify(demoSampleVoucher))}
-                        className="flex-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>{language === 'kn' ? 'ವೋಚರ್ ಜಮೆ ಮಾಡಿಕೊಳ್ಳಿ' : 'Claim ₹1,500 Voucher'}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Section B: Standard User Wallet QR Cards & Real Scenarios */}
-                <div className="text-xs text-slate-400 pt-1">
-                  {language === 'kn'
-                    ? 'ತ್ವರಿತ ಪರೀಕ್ಷೆಗಾಗಿ ಕೆಳಗಿನ ಯಾವುದೇ QR ಕಾರ್ಡ್ ಕ್ಲಿಕ್ ಮಾಡಿ:'
-                    : 'Click any test QR card below to simulate an instant scan:'}
-                </div>
-
-                <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                  {otherUsers.map((user) => {
-                    const handle = user.walletId || user.upiId;
-                    const walletUri = `upi://pay?pa=${handle}&pn=${encodeURIComponent(user.fullName)}&cu=INR`;
-                    return (
-                      <div
-                        key={user.id}
-                        onClick={() => handlePayloadResult(walletUri)}
-                        className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between gap-3 group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="bg-white p-1 rounded-xl shrink-0 shadow-sm">
-                            <QRCodeCanvas
-                              value={walletUri}
-                              size={44}
-                              level="M"
-                            />
-                          </div>
-
-                          <div className="truncate">
-                            <h4 className="text-xs font-bold text-white group-hover:text-indigo-400 transition truncate">
-                              {user.fullName}
-                            </h4>
-                            <span className="text-[11px] font-mono text-emerald-400 block truncate">
-                              {handle}
-                            </span>
-                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                              <Landmark className="w-2.5 h-2.5" />
-                              Safe Wallet • Peer-to-Peer
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold group-hover:bg-indigo-500 group-hover:text-slate-950 transition shrink-0 flex items-center gap-1"
-                        >
-                          <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್' : 'Scan'}</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-
-                  {/* Merchant Store QR */}
-                  <div
-                    onClick={() => handlePayloadResult('upi://pay?pa=ravi.store@okicici&pn=Ravi%20General%20Store&am=250&cu=INR')}
-                    className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="bg-white p-1 rounded-xl shrink-0 shadow-sm">
-                        <QRCodeCanvas
-                          value="upi://pay?pa=ravi.store@okicici&pn=Ravi%20General%20Store&am=250&cu=INR"
-                          size={44}
-                          level="M"
-                        />
-                      </div>
-                      <div className="truncate">
-                        <h4 className="text-xs font-bold text-white group-hover:text-emerald-400 transition truncate">
-                          Ravi General Store (₹250)
-                        </h4>
-                        <span className="text-[11px] font-mono text-slate-400 block truncate">
-                          ravi.store@okicici
-                        </span>
-                        <span className="text-[10px] text-emerald-400">
-                          Verified Local Merchant • Preset ₹250
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold group-hover:bg-emerald-500 group-hover:text-slate-950 transition shrink-0 flex items-center gap-1"
-                    >
-                      <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್' : 'Scan'}</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
-
-                  {/* SEBI Broker QR */}
-                  <div
-                    onClick={() => handlePayloadResult('upi://pay?pa=zerodha.brk@validhdfc&pn=Zerodha%20Broking&am=2000&cu=INR')}
-                    className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="bg-white p-1 rounded-xl shrink-0 shadow-sm">
-                        <QRCodeCanvas
-                          value="upi://pay?pa=zerodha.brk@validhdfc&pn=Zerodha%20Broking&am=2000&cu=INR"
-                          size={44}
-                          level="M"
-                        />
-                      </div>
-                      <div className="truncate">
-                        <h4 className="text-xs font-bold text-white group-hover:text-blue-400 transition truncate">
-                          Zerodha Nifty SIP (₹2,000)
-                        </h4>
-                        <span className="text-[11px] font-mono text-slate-400 block truncate">
-                          zerodha.brk@validhdfc
-                        </span>
-                        <span className="text-[10px] text-blue-400">
-                          SEBI Regulated Protocol • @valid
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold group-hover:bg-blue-500 group-hover:text-slate-950 transition shrink-0 flex items-center gap-1"
-                    >
-                      <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್' : 'Scan'}</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </>

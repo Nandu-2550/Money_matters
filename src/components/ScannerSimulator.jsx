@@ -7,9 +7,7 @@ import {
   AlertCircle, 
   CheckCircle2, 
   ArrowRight,
-  Store,
   Smartphone,
-  TrendingUp,
   Landmark,
   QrCode,
   CreditCard,
@@ -159,53 +157,6 @@ export default function ScannerSimulator() {
         : `QR scanned: ${payeeName || upiId}. Enter amount & PIN to pay.`,
       'success'
     );
-  };
-
-  // Quick Scenarios
-  const handleApplyPreset = (presetNumber) => {
-    setFormError('');
-    setScanResult(null);
-
-    switch (presetNumber) {
-      case 1:
-        setDirection('IN');
-        setCounterparty('ravi.store@okicici');
-        setAmount('1200');
-        setCategory('Business');
-        setMessage('Groceries supply invoice payment from Ravi General Store');
-        setIsCollectRequest(false);
-        break;
-
-      case 2:
-        setDirection('IN');
-        setCounterparty('olx.buyer99@paytm');
-        setAmount('8500');
-        setCategory('Retail');
-        setMessage('OLX buyer token advance: enter upi pin to receive money into account');
-        setIsCollectRequest(true);
-        break;
-
-      case 3:
-        setDirection('OUT');
-        setCounterparty('vip.trades@okaxis');
-        setAmount('15000');
-        setCategory('Investment');
-        setMessage('Guaranteed 40% in 7 days VIP stock group deposit link: http://vipstocks.top/bonus.apk');
-        setIsCollectRequest(false);
-        break;
-
-      case 4:
-        setDirection('OUT');
-        setCounterparty('zerodha.brk@validhdfc');
-        setAmount('2500');
-        setCategory('Investment');
-        setMessage('Monthly Zerodha Nifty LargeCap Index Fund SIP investment');
-        setIsCollectRequest(false);
-        break;
-
-      default:
-        break;
-    }
   };
 
   // Initiate Payment Submission (Validates and triggers Sandbox PIN Modal)
@@ -491,79 +442,6 @@ export default function ScannerSimulator() {
             >
               <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />
               <span>{t.scanner.incomingTab}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Test Scenarios Cards */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80">
-          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
-            {t.scanner.presetsTitle}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-            <button
-              type="button"
-              onClick={() => handleApplyPreset(1)}
-              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Store className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
-                  {t.scanner.preset1}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-1">
-                {t.scanner.preset1Desc}
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleApplyPreset(2)}
-              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
-                  {t.scanner.preset2}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-1">
-                {t.scanner.preset2Desc}
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleApplyPreset(3)}
-              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
-                  {t.scanner.preset3}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-1">
-                {t.scanner.preset3Desc}
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleApplyPreset(4)}
-              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Landmark className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
-                  {t.scanner.preset4}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-1">
-                {t.scanner.preset4Desc}
-              </p>
             </button>
           </div>
         </div>

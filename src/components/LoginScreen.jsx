@@ -40,9 +40,9 @@ export default function LoginScreen() {
   const [loginStep, setLoginStep] = useState('input'); // 'input' | 'otp'
 
   // Login form state
-  const [loginIdentifier, setLoginIdentifier] = useState('nandunusgavai@gmail.com');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [inputOtp, setInputOtp] = useState('');
-  const [loginPassword, setLoginPassword] = useState('1234');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [sentDetails, setSentDetails] = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -334,12 +334,12 @@ export default function LoginScreen() {
                     )}
                   </div>
 
-                  {/* Sandbox / Generated OTP Display with 1-Click Auto-Fill */}
+                  {/* Verification OTP Display */}
                   {(sentDetails?.otp || activeOtpSession?.otp) && (
                     <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between text-left gap-2">
                       <div>
                         <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
-                          {language === 'kn' ? 'ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ ಪರಿಶೀಲನಾ OTP' : 'Verification OTP'}
+                          {language === 'kn' ? 'ಪರಿಶೀಲನಾ OTP' : 'Verification OTP'}
                         </span>
                         <span className="text-lg font-bold font-mono tracking-widest text-emerald-400">
                           {sentDetails?.otp || activeOtpSession?.otp}
@@ -350,7 +350,7 @@ export default function LoginScreen() {
                         onClick={() => setInputOtp(sentDetails?.otp || activeOtpSession?.otp || '')}
                         className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500 hover:text-slate-950 transition cursor-pointer shrink-0"
                       >
-                        {t.auth.autoFillOtp || 'Auto-Fill'}
+                        {language === 'kn' ? 'ಸ್ವಯಂ ನಮೂದಿಸಿ' : 'Auto-Fill'}
                       </button>
                     </div>
                   )}
@@ -670,53 +670,13 @@ export default function LoginScreen() {
             </form>
           )}
 
-          {/* Quick Demo Profiles (1-Click bypass) */}
-          <div className="pt-4 border-t border-slate-800/80 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                {t.auth.quickDemoTitle}
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {language === 'kn' ? '1-ಕ್ಲಿಕ್ ಪ್ರವೇಶ' : '1-Click Access'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {profiles.slice(0, 2).map((profile) => (
-                <button
-                  key={profile.id}
-                  type="button"
-                  onClick={() => loginAsUser(profile.id)}
-                  className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 text-left transition flex items-center gap-2.5 group cursor-pointer"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-slate-800 group-hover:bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
-                    {profile.avatarInitials}
-                  </div>
-                  <div className="truncate flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white group-hover:text-emerald-300 truncate">
-                        {profile.fullName}
-                      </span>
-                      <span className="text-[9px] bg-slate-900 px-1.5 py-0.2 rounded text-emerald-400 font-mono">
-                        PIN: {profile.demoPin || profile.demo_pin || (profile.id === 'usr_anjaneya' ? '5678' : '1234')}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 font-mono block truncate">
-                      {profile.walletId || profile.upiId}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
         </div>
       </div>
 
       {/* Footer Notice */}
-      <div className="max-w-md w-full mx-auto text-center text-[11px] text-slate-500 pb-2">
-        {t.demoBanner}
+      <div className="max-w-md w-full mx-auto text-center text-[11px] text-slate-500 pb-2 flex items-center justify-center gap-1.5">
+        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500/80" />
+        <span>{language === 'kn' ? 'ಎರಡು-ಮಾರ್ಗದ ಮುಚ್ಚಿದ-ಲೂಪ್ NPCI ಸುರಕ್ಷತೆ' : 'Two-Way Closed-Loop Payment Security'}</span>
       </div>
 
     </div>

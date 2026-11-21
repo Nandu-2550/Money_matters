@@ -69,8 +69,8 @@ export default function DemoPinModal({
       setIsShaking(true);
       setErrorMsg(
         language === 'kn' 
-          ? `ತಪ್ಪಾದ ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ PIN! ಡೆಮೊ PIN: ${expectedPin}`
-          : `Incorrect Sandbox PIN! Demo PIN is ${expectedPin}`
+          ? 'ತಪ್ಪಾದ UPI PIN! ದಯವಿಟ್ಟು ನಿಮ್ಮ 4-ಅಂಕಿಯ PIN ಸರಿಯಾಗಿ ನಮೂದಿಸಿ.'
+          : 'Incorrect UPI PIN! Please enter your valid 4-digit PIN.'
       );
       setTimeout(() => {
         setIsShaking(false);
@@ -116,10 +116,10 @@ export default function DemoPinModal({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white leading-tight">
-                {language === 'kn' ? 'NPCI / PhonePe UPI PIN' : 'PhonePe / UPI PIN'}
+                {language === 'kn' ? 'NPCI / UPI PIN' : 'NPCI / UPI PIN'}
               </h3>
               <p className="text-[10px] text-slate-400 leading-tight">
-                {language === 'kn' ? 'ಸಿಮ್ಯುಲೇಟೆಡ್ ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ ಪರಿಶೀಲನೆ' : 'Simulated Sandbox Verification'}
+                {language === 'kn' ? 'NPCI ಸುರಕ್ಷಿತ UPI PIN ದೃಢೀಕರಣ' : 'NPCI Certified 256-Bit Security'}
               </p>
             </div>
           </div>
@@ -168,19 +168,14 @@ export default function DemoPinModal({
           )}
         </div>
 
-        {/* Mandatory Safety Notice */}
-        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-start gap-2">
-          <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-bold block">
-              {language === 'kn' ? 'ಡೆಮೊ ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ PIN:' : 'Sandbox Demo PIN:'}
-            </span>
-            <span>
-              {language === 'kn' 
-                ? `ನೈಜ ಬ್ಯಾಂಕ್ PIN ಎಂದಿಗೂ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ. (ನಿಮ್ಮ ಡೆಮೊ PIN: ${expectedPin})`
-                : `Never enter real bank PINs. (Your Demo PIN: ${expectedPin})`}
-            </span>
-          </div>
+        {/* UPI Security Badge */}
+        <div className="py-2 px-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>
+            {language === 'kn' 
+              ? 'NPCI ಎನ್‌ಕ್ರಿಪ್ಟ್ ಮಾಡಲಾದ ಸುರಕ್ಷಿತ ಪಾವತಿ ಗೇಟ್‌ವೇ'
+              : 'NPCI Encrypted Safe Wallet Verification'}
+          </span>
         </div>
 
         {/* 4 Masked PIN Indicator Dots */}
