@@ -13,9 +13,13 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
-  Plus
+  Plus,
+  Eye,
+  EyeOff,
+  Lock
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
+import DemoPinModal from './DemoPinModal';
 
 export default function Navbar() {
   const { 
@@ -33,11 +37,14 @@ export default function Navbar() {
     isOnline,
     offlineOutboxCount,
     syncOfflineOutbox,
-    setIsTopUpModalOpen
+    setIsTopUpModalOpen,
+    isBalanceRevealed,
+    setIsBalanceRevealed
   } = useWallet();
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
   const heldCount = computedMetrics.heldTransactions.length;
 
   const handleManualSync = async (e) => {
@@ -46,6 +53,22 @@ export default function Navbar() {
     setIsSyncing(true);
     await syncOfflineOutbox();
     setIsSyncing(false);
+  };
+
+  const handleBalanceClick = () => {
+    if (isBalanceRevealed) {
+      setIsBalanceRevealed(false);
+    } else {
+      setShowPinModal(true);
+    }
+  };
+
+  const handlePinSuccess = () => {
+    setShowPinModal(false);
+    setIsBalanceRevealed(true);
+    setTimeout(() => {
+      setIsBalanceRevealed(false);
+    }, 15000);
   };
 
   return (
@@ -216,22 +239,33 @@ export default function Navbar() {
             {/* Right Utility Actions */}
             <div className="flex items-center gap-2">
               
-              {/* Standalone Safe-Wallet Balance Card + Quick Add Money */}
+              {/* Standalone Safe-Wallet Balance Card (Masked by Default) + Quick Add Money */}
               <div className="flex items-center gap-1">
                 <div 
-                  onClick={() => setActiveTab('dashboard')}
-                  className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5 flex items-center gap-2 transition"
-                  title="Safe-Wallet Balance"
+                  onClick={handleBalanceClick}
+                  className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5 flex items-center gap-2 transition group"
+                  title={isBalanceRevealed ? "Click to mask balance" : "Click to check balance with PIN"}
                 >
-                  <div className="w-6 h-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                    <CreditCard className="w-3.5 h-3.5" />
+                  <div className="w-6 h-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition">
+                    {isBalanceRevealed ? <CreditCard className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
                   </div>
                   <div>
-                    <div className="text-[10px] font-medium text-slate-400">
-                      {t.currentBalanceLabel}
+                    <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+                      <span>{t.currentBalanceLabel}</span>
+                      {isBalanceRevealed ? (
+                        <EyeOff className="w-2.5 h-2.5 text-slate-500 group-hover:text-slate-300" />
+                      ) : (
+                        <Eye className="w-2.5 h-2.5 text-slate-500 group-hover:text-slate-300" />
+                      )}
                     </div>
-                    <div className="text-xs sm:text-sm font-bold text-slate-100">
-                      ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}
+                    <div className="text-xs sm:text-sm font-bold text-slate-100 font-mono">
+                      {isBalanceRevealed ? (
+                        `₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
+                      ) : (
+                        <span className="text-slate-400 tracking-wider text-xs font-semibold">
+                          ₹ • • • •
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -317,6 +351,16 @@ export default function Navbar() {
           </button>
         </div>
       </div>
+
+      {/* Demo PIN Modal for Secure Balance Inquiry */}
+      {showPinModal && (
+        <DemoPinModal
+          isOpen={showPinModal}
+          onClose={() => setShowPinModal(false)}
+          onSuccess={handlePinSuccess}
+          mode="balance"
+        />
+      )}
     </>
   );
 }

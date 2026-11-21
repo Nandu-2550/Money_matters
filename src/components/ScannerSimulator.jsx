@@ -42,7 +42,9 @@ export default function ScannerSimulator() {
     claimOfflineVoucher,
     isTopUpModalOpen,
     setIsTopUpModalOpen,
-    showToast
+    showToast,
+    isBalanceRevealed,
+    setIsBalanceRevealed
   } = useWallet();
 
   // Form State
@@ -282,6 +284,7 @@ export default function ScannerSimulator() {
     setShowPinModal(false);
 
     if (pinModalMode === 'balance') {
+      setIsBalanceRevealed(true);
       setShowBalanceModal(true);
       return;
     }

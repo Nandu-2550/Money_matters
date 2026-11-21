@@ -9,7 +9,9 @@ import {
   Info, 
   Building2,
   Filter,
-  Check
+  Check,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -29,7 +31,14 @@ import { useWallet } from '../context/WalletContext';
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
 
 export default function MoneyFlowDashboard() {
-  const { language, t, transactions, computedMetrics } = useWallet();
+  const { 
+    language, 
+    t, 
+    transactions, 
+    computedMetrics, 
+    isBalanceRevealed, 
+    setIsBalanceRevealed 
+  } = useWallet();
 
   const [monthlyAmount, setMonthlyAmount] = useState(2500);
   const [durationYears, setDurationYears] = useState(3);
@@ -116,11 +125,21 @@ export default function MoneyFlowDashboard() {
         
         {/* Balance */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 block mb-1">
-            {t.currentBalanceLabel}
-          </span>
-          <div className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] font-medium text-slate-400">
+              {t.currentBalanceLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsBalanceRevealed(!isBalanceRevealed)}
+              className="text-slate-500 hover:text-slate-300 transition cursor-pointer"
+              title={isBalanceRevealed ? "Hide Balance" : "Reveal Balance"}
+            >
+              {isBalanceRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          <div className="text-xl sm:text-2xl font-bold text-white tracking-tight font-mono">
+            {isBalanceRevealed ? `₹${computedMetrics.currentBalance.toLocaleString('en-IN')}` : '₹ • • • •'}
           </div>
           <span className="text-[10px] text-emerald-400/90 font-medium block mt-1">
             ✓ {language === 'kn' ? 'ಲೆಡ್ಜರ್ ತಾಳೆಯಾಗಿದೆ' : 'Reconciled ledger'}
@@ -173,7 +192,9 @@ export default function MoneyFlowDashboard() {
         <div className="flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="font-mono text-[11px] text-slate-300">
-            {`₹${(computedMetrics.startingBalance || 25000).toLocaleString('en-IN')} + ₹${computedMetrics.totalInflow.toLocaleString('en-IN')} - ₹${computedMetrics.totalOutflow.toLocaleString('en-IN')} = ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`}
+            {isBalanceRevealed
+              ? `₹${(computedMetrics.startingBalance || 25000).toLocaleString('en-IN')} + ₹${computedMetrics.totalInflow.toLocaleString('en-IN')} - ₹${computedMetrics.totalOutflow.toLocaleString('en-IN')} = ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
+              : `₹•••• + ₹•••• - ₹•••• = ₹•••• (Check Balance to Reveal)`}
           </span>
         </div>
         <span className="text-[11px] text-slate-400">

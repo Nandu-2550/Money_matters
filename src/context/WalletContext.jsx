@@ -43,6 +43,7 @@ export function WalletProvider({ children }) {
   const [notification, setNotification] = useState(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+  const [isBalanceRevealed, setIsBalanceRevealed] = useState(false);
 
   // Active Profile Object
   const currentUser = useMemo(() => {
@@ -935,7 +936,9 @@ export function WalletProvider({ children }) {
     isProfileModalOpen,
     setIsProfileModalOpen,
     isTopUpModalOpen,
-    setIsTopUpModalOpen
+    setIsTopUpModalOpen,
+    isBalanceRevealed,
+    setIsBalanceRevealed
   };
 
   return (
