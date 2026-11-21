@@ -924,8 +924,10 @@ export function WalletProvider({ children }) {
   // Submit and screen new transaction for the active user
   const submitTransaction = useCallback(async (txInput) => {
     const scored = scoreTransaction(txInput);
-    const sharedTxId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const myWallet = currentUser?.walletId || currentUser?.upiId || 'user@mmwallet';
+    const sharedTxId = !isOnline 
+      ? `OFF-${(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).substring(2, 10)).toUpperCase()}`
+      : `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const myWallet = currentUser?.walletId || currentUser?.upiId || currentUser?.wallet_id || 'user@mmwallet';
     const isOut = txInput.direction === 'OUT';
 
     // Offline Voucher Signature Generation for OUT transfers
@@ -934,13 +936,17 @@ export function WalletProvider({ children }) {
 
     if (isOut && scored.status === 'VERIFIED') {
       try {
-        generatedVoucher = await signOfflineVoucher({
+        const signedRes = await signOfflineVoucher({
           tx_id: sharedTxId,
           from_wallet: myWallet,
+          from_name: currentUser?.fullName || currentUser?.full_name || myWallet,
           to_wallet: txInput.counterparty.trim(),
-          amount: Number(txInput.amount)
+          to_name: txInput.payeeName || txInput.counterparty.trim(),
+          amount: Number(txInput.amount),
+          timestamp: Date.now()
         });
-        voucherSig = generatedVoucher.signature;
+        generatedVoucher = typeof signedRes === 'string' ? JSON.parse(signedRes) : signedRes;
+        voucherSig = generatedVoucher.sig || generatedVoucher.signature;
       } catch (err) {
         console.warn('[WalletContext] Voucher signing error:', err);
       }

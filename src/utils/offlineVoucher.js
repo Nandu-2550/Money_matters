@@ -2,7 +2,7 @@
  * offlineVoucher.js
  * Cryptographic Offline Payment Voucher Engine for Money Matters Safe-Wallet.
  * Generates and verifies HMAC-SHA256 signed payment vouchers for peer-to-peer
- * offline handshakes (User 1 generates voucher QR -> User 2 scans & immediately claims funds).
+ * offline handshakes (Sender generates voucher QR -> Receiver scans & claims funds).
  */
 
 const VOUCHER_SECRET = import.meta.env.VITE_VOUCHER_SECRET || 'MM_OFFLINE_SAFE_WALLET_2026';
@@ -12,9 +12,11 @@ const OFFLINE_OUTBOX_KEY = 'mm_offline_outbox_v1';
 // Convert ArrayBuffer to Hex string
 function bufferToHex(buffer) {
   const bytes = new Uint8Array(buffer);
-  return Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return hex;
 }
 
 // Convert string to Uint8Array UTF-8
@@ -22,7 +24,7 @@ function strToBuffer(str) {
   return new TextEncoder().encode(str);
 }
 
-// Simple fallback HMAC-SHA256 for non-crypto environments
+// Simple fallback HMAC-SHA256 for non-crypto environments (e.g. non-HTTPS local IP)
 async function computeHmacSha256(message, secret) {
   try {
     if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
@@ -38,22 +40,27 @@ async function computeHmacSha256(message, secret) {
       return bufferToHex(signature);
     }
   } catch (err) {
-    console.warn('[OfflineVoucher] WebCrypto unavailable, using deterministic hash:', err);
+    console.warn('[OfflineVoucher] WebCrypto unavailable, using deterministic fallback hash:', err);
   }
 
-  // Deterministic fallback hash for offline simulation environments
-  let hash = 0x811c9dc5;
-  const combined = `${secret}#${message}#${secret}`;
+  // Deterministic fallback hash for offline simulation environments without WebCrypto
+  let h1 = 0x811c9dc5;
+  let h2 = 0x41c64e6d;
+  const combined = `${secret}|${message}|${secret}`;
   for (let i = 0; i < combined.length; i++) {
-    hash ^= combined.charCodeAt(i);
-    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    const code = combined.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 0x01000193);
+    h2 = Math.imul(h2 ^ code, 0x5bd1e995);
   }
-  return `fallback_${Math.abs(hash).toString(16).padStart(16, '0')}_${message.length}`;
+  const part1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const part2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  return `fallback_${part1}${part2}_${message.length.toString(16)}`;
 }
 
 /**
  * Sign an offline payment voucher
- * Message structure: `${tx_id}|${from_wallet}|${to_wallet}|${amount}|${timestamp}`
+ * Canonical payload: `${tx_id}|${from_wallet}|${to_wallet}|${Number(amount).toFixed(2)}|${timestamp}`
+ * Returns: JSON string representation of the signed voucher object
  */
 export async function signOfflineVoucher({
   tx_id,
@@ -65,15 +72,17 @@ export async function signOfflineVoucher({
   timestamp = Date.now(),
   note = ''
 }) {
-  const cleanTxId = tx_id || `vtx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const cleanTxId = tx_id || `OFF-${(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).substring(2, 10)).toUpperCase()}`;
   const cleanAmount = Number(amount);
   const normalizedFrom = (from_wallet || '').trim().toLowerCase();
   const normalizedTo = (to_wallet || '').trim().toLowerCase();
+  const formattedAmount = cleanAmount.toFixed(2);
 
-  const messageToSign = `${cleanTxId}|${normalizedFrom}|${normalizedTo}|${cleanAmount}|${timestamp}`;
-  const sig = await computeHmacSha256(messageToSign, VOUCHER_SECRET);
+  // Canonical payload string: `${tx_id}|${from_wallet}|${to_wallet}|${Number(amount).toFixed(2)}|${timestamp}`
+  const canonicalPayload = `${cleanTxId}|${normalizedFrom}|${normalizedTo}|${formattedAmount}|${timestamp}`;
+  const sig = await computeHmacSha256(canonicalPayload, VOUCHER_SECRET);
 
-  const voucherPayload = {
+  const voucherObj = {
     v: 1,
     type: 'MM_VOUCHER',
     tx_id: cleanTxId,
@@ -88,41 +97,57 @@ export async function signOfflineVoucher({
     signature: sig
   };
 
-  return voucherPayload;
+  // Return standard JSON string with parsed object attached for convenience
+  const jsonStr = JSON.stringify(voucherObj);
+  return Object.assign(jsonStr, voucherObj);
 }
 
 /**
- * Verify an offline payment voucher payload
+ * Verify an offline payment voucher
+ * Accepts raw JSON string or voucher object
+ * Returns { valid: true, voucher } or { valid: false, reason: string }
  */
-export async function verifyOfflineVoucher(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return { valid: false, reason: 'Malformed voucher payload.' };
+export async function verifyOfflineVoucher(rawInput) {
+  let voucher = null;
+  try {
+    if (typeof rawInput === 'string') {
+      voucher = JSON.parse(rawInput);
+    } else if (rawInput && typeof rawInput === 'object') {
+      voucher = rawInput;
+    }
+  } catch {
+    return { valid: false, reason: 'Invalid JSON payload structure.' };
   }
 
-  const sigToVerify = payload.sig || payload.signature;
-  if (payload.type !== 'MM_VOUCHER' || !payload.tx_id || !sigToVerify) {
-    return { valid: false, reason: 'Invalid voucher type or missing signature.' };
+  if (!voucher || voucher.type !== 'MM_VOUCHER') {
+    return { valid: false, reason: 'Invalid or unsupported voucher type.' };
   }
 
-  const cleanAmount = Number(payload.amount);
-  if (!cleanAmount || cleanAmount <= 0) {
-    return { valid: false, reason: 'Invalid voucher amount.' };
+  const sigToVerify = voucher.sig || voucher.signature;
+  if (!voucher.tx_id || !sigToVerify) {
+    return { valid: false, reason: 'Missing voucher ID or signature.' };
   }
 
-  const normalizedFrom = (payload.from_wallet || '').trim().toLowerCase();
-  const normalizedTo = (payload.to_wallet || '').trim().toLowerCase();
+  const cleanAmount = Number(voucher.amount);
+  if (isNaN(cleanAmount) || cleanAmount <= 0) {
+    return { valid: false, reason: 'Invalid or missing voucher amount.' };
+  }
 
-  const messageToVerify = `${payload.tx_id}|${normalizedFrom}|${normalizedTo}|${cleanAmount}|${payload.timestamp}`;
-  const expectedSig = await computeHmacSha256(messageToVerify, VOUCHER_SECRET);
+  const normalizedFrom = (voucher.from_wallet || '').trim().toLowerCase();
+  const normalizedTo = (voucher.to_wallet || '').trim().toLowerCase();
+  const formattedAmount = cleanAmount.toFixed(2);
+
+  const canonicalToVerify = `${voucher.tx_id}|${normalizedFrom}|${normalizedTo}|${formattedAmount}|${voucher.timestamp}`;
+  const expectedSig = await computeHmacSha256(canonicalToVerify, VOUCHER_SECRET);
 
   if (sigToVerify !== expectedSig) {
     return {
       valid: false,
-      reason: 'Cryptographic signature mismatch! Voucher may have been altered or tampered with.'
+      reason: 'Invalid or tampered offline voucher signature'
     };
   }
 
-  return { valid: true };
+  return { valid: true, voucher };
 }
 
 // ----------------------------------------------------------------------
@@ -131,7 +156,7 @@ export async function verifyOfflineVoucher(payload) {
 
 export function getClaimedVoucherIds() {
   try {
-    const raw = localStorage.getItem(CLAIMED_VOUCHERS_KEY);
+    const raw = localStorage.getItem(CLAIMED_VOUCHERS_KEY) || localStorage.getItem('mm_claimed_vouchers');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -150,12 +175,13 @@ export function markVoucherClaimed(tx_id) {
   if (!list.includes(tx_id)) {
     list.push(tx_id);
     localStorage.setItem(CLAIMED_VOUCHERS_KEY, JSON.stringify(list));
+    localStorage.setItem('mm_claimed_vouchers', JSON.stringify(list));
   }
 }
 
 export function getOfflineOutbox() {
   try {
-    const raw = localStorage.getItem(OFFLINE_OUTBOX_KEY);
+    const raw = localStorage.getItem(OFFLINE_OUTBOX_KEY) || localStorage.getItem('mm_offline_outbox');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -165,6 +191,7 @@ export function getOfflineOutbox() {
 export function saveOfflineOutbox(items) {
   try {
     localStorage.setItem(OFFLINE_OUTBOX_KEY, JSON.stringify(items));
+    localStorage.setItem('mm_offline_outbox', JSON.stringify(items));
   } catch (err) {
     console.warn('[OfflineVoucher] Failed to persist outbox:', err);
   }
@@ -173,7 +200,6 @@ export function saveOfflineOutbox(items) {
 export function queueOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
   const outbox = getOfflineOutbox();
   const txIdentifier = senderDebitTx.tx_id || senderDebitTx.txId || senderDebitTx.id;
-  // Avoid duplicate pairs
   const filtered = outbox.filter(item => item.tx_id !== txIdentifier);
   filtered.push({
     tx_id: txIdentifier,

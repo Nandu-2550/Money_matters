@@ -21,7 +21,9 @@ import {
   ExternalLink,
   User,
   Volume2,
-  FileText
+  FileText,
+  WifiOff,
+  Zap
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { findMatchingProfile } from '../lib/supabaseClient';
@@ -483,6 +485,31 @@ export default function ScannerSimulator() {
             </span>
           </button>
 
+        </div>
+
+        {/* Claim Offline Payment Action Banner */}
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-950 to-emerald-500/10 border border-amber-500/20">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+              <WifiOff className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white block">
+                {language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಪಾವತಿ ಕ್ಲೈಮ್ ಮಾಡಿ' : 'Claim Offline Payment'}
+              </span>
+              <span className="text-[10px] text-slate-400 block">
+                {language === 'kn' ? 'ಸಹಿ ಮಾಡಿದ ವೋಚರ್ QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ ಅಥವಾ PNG ಅಪ್‌ಲೋಡ್ ಮಾಡಿ' : 'Scan received voucher QR or upload voucher PNG'}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowQRScanner(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow-sm shrink-0"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>{language === 'kn' ? 'ವೋಚರ್ ಸ್ಕ್ಯಾನ್' : 'Claim Voucher'}</span>
+          </button>
         </div>
 
         {/* Horizontal "Money Matters Contacts" Bar */}

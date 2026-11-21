@@ -8,25 +8,32 @@ import {
   AlertCircle, 
   CheckCircle2, 
   UserCheck, 
-  Landmark, 
   ArrowRight,
   ShieldAlert,
   ShieldCheck,
   Zap,
-  FileCheck
+  FileCheck,
+  CreditCard,
+  WifiOff
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useWallet } from '../context/WalletContext';
-import { verifyOfflineVoucher, isVoucherClaimed } from '../utils/offlineVoucher';
+import { 
+  verifyOfflineVoucher, 
+  isVoucherClaimed, 
+  getOfflineOutbox, 
+  signOfflineVoucher 
+} from '../utils/offlineVoucher';
 
 export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaimVoucher }) {
-  const { currentUser, profiles, language, t } = useWallet();
-  const [activeTab, setActiveTab] = useState('camera'); // 'camera' | 'upload'
+  const { currentUser, profiles, language, t, isOnline, transactions } = useWallet();
+  const [activeTab, setActiveTab] = useState('camera'); // 'camera' | 'upload' | 'demo'
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [scanError, setScanError] = useState('');
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [claimSuccessData, setClaimSuccessData] = useState(null);
+  const [generatingDemoVoucher, setGeneratingDemoVoucher] = useState(false);
 
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -41,7 +48,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const myWalletId = currentUser?.walletId || currentUser?.upiId || 'user@mmwallet';
+  const myWalletId = currentUser?.walletId || currentUser?.upiId || currentUser?.wallet_id || 'user@mmwallet';
 
   // Parse UPI or MM Wallet URI (Case-insensitive & resilient)
   const parseWalletUri = useCallback((rawText) => {
@@ -81,7 +88,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       }
     }
 
-    // 2. Direct Wallet / UPI Handle (e.g. name@okaxis, user@mmwallet)
+    // 2. Direct Wallet / UPI Handle (e.g. name@okaxis, user@mmwallet, broker.brk@valid)
     if (trimmed.includes('@') && !trimmed.startsWith('{')) {
       return {
         walletId: trimmed,
@@ -104,7 +111,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       }
     }
 
-    // 4. Return trimmed raw text if it looks like an identifier
+    // 4. Return trimmed raw text if it looks like a wallet / UPI identifier
     if (trimmed.length > 2 && !trimmed.startsWith('{')) {
       return {
         walletId: trimmed,
@@ -133,7 +140,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     setCameraActive(false);
   }, []);
 
-  // Handle Scanning Result (Dual Mode: Offline Voucher QR or Standard Payee QR)
+  // Handle Scanning Result (Offline Voucher QR or Standard Payee QR)
   const handlePayloadResult = useCallback(async (rawText) => {
     setScanError('');
     if (!rawText || typeof rawText !== 'string') return;
@@ -144,41 +151,44 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     // -----------------------------------------------------------------
     if (trimmed.startsWith('{') && trimmed.includes('MM_VOUCHER')) {
       try {
-        const voucher = JSON.parse(trimmed);
-        const hasSig = voucher.sig || voucher.signature;
-        if (voucher.type !== 'MM_VOUCHER' || !voucher.tx_id || !hasSig) {
-          throw new Error('Malformed voucher schema');
-        }
-
         // 1. Cryptographic HMAC Signature Verification
-        const verification = await verifyOfflineVoucher(voucher);
-        if (!verification?.valid) {
+        const verification = await verifyOfflineVoucher(trimmed);
+        if (!verification?.valid || !verification?.voucher) {
           setScanError(
             language === 'kn'
               ? 'ವೋಚರ್ ಸಹಿ ಪರಿಶೀಲನೆ ವಿಫಲವಾಗಿದೆ! ಇದು ತಿದ್ದುಪಡಿ ಮಾಡಲಾದ ಅಥವಾ ನಕಲಿ ವೋಚರ್ ಆಗಿದೆ.'
-              : (verification?.reason || 'Voucher cryptographic verification failed! Signature mismatch or invalid voucher secret.')
+              : (verification?.reason || 'Invalid or tampered offline voucher signature')
           );
           return;
         }
 
-        // 2. Addressee Verification: Must match current user's wallet ID
-        const targetWallet = (voucher.to_wallet || '').toLowerCase();
-        const activeWallet = myWalletId.toLowerCase();
-        if (targetWallet !== activeWallet) {
+        const voucher = verification.voucher;
+
+        // 2. Addressee Verification: Must match current user's wallet
+        const targetWallet = (voucher.to_wallet || '').toLowerCase().trim();
+        const activeWallet = (myWalletId || '').toLowerCase().trim();
+        const userEmailPrefix = (currentUser?.email || '').split('@')[0].toLowerCase();
+        const isAddressedToMe = targetWallet === activeWallet || 
+                                targetWallet.includes(userEmailPrefix) ||
+                                (currentUser?.wallet_id && targetWallet === currentUser.wallet_id.toLowerCase());
+
+        if (!isAddressedToMe) {
           setScanError(
             language === 'kn'
-              ? `ಈ ವೋಚರ್ ${voucher.to_wallet} ಗೆ ಉದ್ದೇಶಿಸಲಾಗಿದೆ, ಆದರೆ ನಿಮ್ಮ ಸಕ್ರಿಯ ವಾಲೆಟ್ ${myWalletId} ಆಗಿದೆ.`
-              : `Voucher is addressed to ${voucher.to_wallet}, but your active safe wallet is ${myWalletId}.`
+              ? `ಈ ಪಾವತಿ ವೋಚರ್ [${voucher.to_wallet}] ಗೆ ಉದ್ದೇಶಿಸಲಾಗಿದೆ, ಆದರೆ ನಿಮ್ಮ ಸಕ್ರಿಯ ವಾಲೆಟ್ [${myWalletId}] ಆಗಿದೆ.`
+              : `This payment voucher is addressed to [${voucher.to_wallet}], but your active wallet is [${myWalletId}].`
           );
           return;
         }
 
-        // 3. Replay Protection: Check if already claimed
-        if (isVoucherClaimed(voucher.tx_id)) {
+        // 3. Replay Protection: Check if already claimed in localStorage or transactions
+        const alreadyClaimedLocal = isVoucherClaimed(voucher.tx_id);
+        const alreadyClaimedInTx = transactions.some(t => (t.txId === voucher.tx_id || t.id === voucher.tx_id));
+        if (alreadyClaimedLocal || alreadyClaimedInTx) {
           setScanError(
             language === 'kn'
               ? `ಈ ಪಾವತಿ ವೋಚರ್ (ID: ${voucher.tx_id}) ಈಗಾಗಲೇ ಬಳಸಲಾಗಿದೆ! ಪುನರಾವರ್ತನೆ ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ.`
-              : `This payment voucher (ID: ${voucher.tx_id}) has already been claimed! Replay attack prevented.`
+              : `This payment voucher (${voucher.tx_id}) has already been claimed! Replay attack prevented.`
           );
           return;
         }
@@ -192,6 +202,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
         setClaimSuccessData({
           amount: voucher.amount,
           from: voucher.from_wallet,
+          fromName: voucher.from_name || voucher.from_wallet,
           txId: voucher.tx_id,
           timestamp: new Date(voucher.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
@@ -225,10 +236,11 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     // Lookup payee details if profile exists
     const matchedProfile = profiles.find(
       p => (p.walletId && p.walletId.toLowerCase() === cleanWallet) ||
-           (p.upiId && p.upiId.toLowerCase() === cleanWallet)
+           (p.upiId && p.upiId.toLowerCase() === cleanWallet) ||
+           (p.wallet_id && p.wallet_id.toLowerCase() === cleanWallet)
     );
-    const finalName = matchedProfile ? matchedProfile.fullName : (parsed.payeeName || parsed.walletId);
-    const finalHandle = matchedProfile ? (matchedProfile.walletId || matchedProfile.upiId) : parsed.walletId;
+    const finalName = matchedProfile ? (matchedProfile.fullName || matchedProfile.full_name) : (parsed.payeeName || parsed.walletId);
+    const finalHandle = matchedProfile ? (matchedProfile.walletId || matchedProfile.upiId || matchedProfile.wallet_id) : parsed.walletId;
 
     // Success! Stop camera if running, then trigger callback
     await stopCamera();
@@ -241,7 +253,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       });
     }
     onCloseRef.current?.();
-  }, [parseWalletUri, profiles, language, stopCamera, myWalletId]);
+  }, [parseWalletUri, profiles, language, stopCamera, myWalletId, currentUser, transactions]);
 
   const handlePayloadResultRef = useRef(handlePayloadResult);
   handlePayloadResultRef.current = handlePayloadResult;
@@ -256,7 +268,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     try {
       await stopCamera();
 
-      // Check if container element exists in DOM (with wait if mounting)
+      // Check if container element exists in DOM
       let elem = document.getElementById('qr-camera-element');
       if (!elem) {
         await new Promise(r => setTimeout(r, 100));
@@ -270,7 +282,6 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       const html5QrCode = new Html5Qrcode('qr-camera-element');
       scannerRef.current = html5QrCode;
 
-      // Select camera: prefers rear camera on mobile, desktop webcam on laptop
       let cameraConfig = { facingMode: 'environment' };
       try {
         const devices = await Html5Qrcode.getCameras();
@@ -302,11 +313,13 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           (decodedText) => {
             handlePayloadResultRef.current?.(decodedText);
           },
-          () => {}
+          () => {
+            // normal frame scan misses ignored
+          }
         );
-      } catch (firstErr) {
-        console.warn('[QRScanner] Primary camera config failed, attempting user camera fallback:', firstErr);
-        // Fallback for laptops/desktops where rear/environment camera is absent
+        setCameraActive(true);
+      } catch (startErr) {
+        console.warn('[QRScanner] Failed rear camera start, trying generic camera:', startErr);
         await html5QrCode.start(
           { facingMode: 'user' },
           qrConfig,
@@ -315,18 +328,14 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           },
           () => {}
         );
+        setCameraActive(true);
       }
-
-      setCameraActive(true);
     } catch (err) {
-      console.warn('[QRScanner] Camera start failed:', err);
-      setCameraActive(false);
+      console.warn('[QRScanner] Camera open failed:', err);
       setCameraError(
         language === 'kn'
-          ? 'ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು "ಚಿತ್ರ ಅಪ್‌ಲೋಡ್" ಬಳಸಿ.'
-          : (err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
-              ? 'Camera permission denied. Please allow camera permissions in your browser, or use "Upload Image".'
-              : 'Camera unavailable or not detected. Please use "Upload Image".')
+          ? 'ಕ್ಯಾಮೆರಾ ಅನುಮತಿ ಲಭ್ಯವಿಲ್ಲ ಅಥವಾ ಕ್ಯಾಮೆರಾ ಸಂಪರ್ಕ ಕಡಿತಗೊಂಡಿದೆ. ದಯವಿಟ್ಟು "ಚಿತ್ರ ಅಪ್‌ಲೋಡ್" ಅಥವಾ "1-ಟ್ಯಾಪ್ ಡೆಮೊ" ಬಳಸಿ.'
+          : 'Camera access denied or unavailable on this device. Please use "Upload Image" or "1-Tap Demo" instead.'
       );
     } finally {
       isStartingRef.current = false;
@@ -355,7 +364,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     };
   }, [isOpen, activeTab, startCamera, stopCamera]);
 
-  // Handle File Upload Scan
+  // Handle File Upload Scan (scanFile)
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -390,6 +399,52 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     onClose();
   };
 
+  // 1-Tap Demo: Unclaimed local vouchers to claim
+  const unclaimedOutboxVouchers = useMemo(() => {
+    const outbox = getOfflineOutbox();
+    const result = [];
+    for (const item of outbox) {
+      const vTx = item.senderTx || item;
+      const txId = vTx.tx_id || vTx.txId || item.tx_id || item.txId;
+      if (txId && !isVoucherClaimed(txId)) {
+        result.push({
+          tx_id: txId,
+          from_wallet: vTx.counterpartyWalletId || vTx.userId || 'payer@mmwallet',
+          to_wallet: myWalletId,
+          amount: vTx.amount || 250,
+          timestamp: Date.now() - 60000
+        });
+      }
+    }
+    return result;
+  }, [myWalletId]);
+
+  // Generate instant test offline voucher for current user
+  const handleGenerateTestVoucher = async (amount = 500) => {
+    setGeneratingDemoVoucher(true);
+    setScanError('');
+    try {
+      const otherProfile = profiles.find(p => p.id !== currentUser?.id) || profiles[1];
+      const fromWallet = otherProfile?.walletId || otherProfile?.wallet_id || otherProfile?.upiId || 'test.sender@mmwallet';
+      const fromName = otherProfile?.fullName || otherProfile?.full_name || 'Rahul Sharma';
+
+      const signedJson = await signOfflineVoucher({
+        tx_id: `OFF-TEST-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+        from_wallet: fromWallet,
+        from_name: fromName,
+        to_wallet: myWalletId,
+        to_name: currentUser?.fullName || currentUser?.full_name || 'My Safe Wallet',
+        amount: Number(amount)
+      });
+
+      setGeneratingDemoVoucher(false);
+      handlePayloadResult(typeof signedJson === 'string' ? signedJson : JSON.stringify(signedJson));
+    } catch (err) {
+      setGeneratingDemoVoucher(false);
+      setScanError(`Failed to generate test voucher: ${err.message}`);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -404,10 +459,10 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
             </div>
             <div>
               <h3 className="text-sm font-bold text-white leading-tight">
-                {language === 'kn' ? 'ಯಾವುದೇ QR / ವೋಚರ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ' : 'Scan Wallet QR or Payment Voucher'}
+                {language === 'kn' ? 'QR ಸ್ಕ್ಯಾನ್ / ಆಫ್‌ಲೈನ್ ವೋಚರ್ ಸ್ವೀಕರಿಸಿ' : 'Scan to Pay OR Claim Offline Voucher'}
               </h3>
               <p className="text-[10px] text-slate-400 leading-tight">
-                {language === 'kn' ? '3-ಮೋಡ್ ಸ್ಕ್ಯಾನರ್ + ಆಫ್‌ಲೈನ್ ವೋಚರ್ ಹ್ಯಾಂಡ್‌ಶೇಕ್' : '3-Mode Camera, Image & Offline Handshake'}
+                {language === 'kn' ? 'ಕ್ಯಾಮೆರಾ, ಇಮೇಜ್ ಅಪ್‌ಲೋಡ್ ಅಥವಾ 1-ಟ್ಯಾಪ್ ಡೆಮೊ' : 'Camera, Image Upload & 1-Tap Handshake'}
               </p>
             </div>
           </div>
@@ -415,6 +470,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           <button
             onClick={handleModalClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            title="Close"
           >
             <X className="w-4 h-4" />
           </button>
@@ -429,14 +485,14 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
 
             <div className="space-y-1">
               <span className="text-[11px] font-bold tracking-wider uppercase text-emerald-400">
-                {language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಪಾವತಿ ಸ್ವೀಕರಿಸಲಾಗಿದೆ!' : 'Offline Voucher Claimed!'}
+                {language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಪಾವತಿ ಯಶಸ್ವಿಯಾಗಿ ಜಮೆಯಾಗಿದೆ!' : 'Offline Voucher Claimed Successfully!'}
               </span>
               <h4 className="text-2xl font-black text-white font-mono">
                 + ₹{Number(claimSuccessData.amount).toLocaleString('en-IN')}
               </h4>
               <p className="text-xs text-slate-300">
                 {language === 'kn' ? 'ಕಳುಹಿಸಿದವರು:' : 'Received from:'}{' '}
-                <span className="font-mono text-emerald-400">{claimSuccessData.from}</span>
+                <span className="font-mono text-emerald-400 font-bold">{claimSuccessData.from}</span>
               </p>
             </div>
 
@@ -451,7 +507,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
               </div>
               <div className="flex justify-between">
                 <span>Settlement:</span>
-                <span className="text-emerald-400 font-semibold">Credited to Safe Wallet</span>
+                <span className="text-emerald-400 font-semibold">Credited to Safe Wallet Balance</span>
               </div>
             </div>
 
@@ -470,7 +526,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
               <button
                 type="button"
                 onClick={() => setActiveTab('camera')}
-                className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   activeTab === 'camera'
                     ? 'bg-slate-800 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
@@ -483,7 +539,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
               <button
                 type="button"
                 onClick={() => setActiveTab('upload')}
-                className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   activeTab === 'upload'
                     ? 'bg-slate-800 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
@@ -491,6 +547,19 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>{language === 'kn' ? 'ಚಿತ್ರ ಅಪ್‌ಲೋಡ್' : 'Upload Image'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('demo')}
+                className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'demo'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>{language === 'kn' ? '1-ಟ್ಯಾಪ್ ಡೆಮೊ' : '1-Tap Demo'}</span>
               </button>
             </div>
 
@@ -505,7 +574,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
             {/* MODE 1: LIVE CAMERA */}
             {activeTab === 'camera' && (
               <div className="space-y-3">
-                <div className="relative bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden min-h-[260px] flex items-center justify-center">
+                <div className="relative bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden min-h-[250px] flex items-center justify-center">
                   <div id="qr-camera-element" className="w-full h-full max-w-[280px] mx-auto" />
 
                   {!cameraActive && !cameraError && (
@@ -527,10 +596,18 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                         <button
                           type="button"
                           onClick={() => setActiveTab('upload')}
-                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition flex items-center gap-1.5"
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition flex items-center gap-1.5 cursor-pointer"
                         >
                           <Upload className="w-3.5 h-3.5" />
                           <span>{language === 'kn' ? 'ಚಿತ್ರ ಅಪ್‌ಲೋಡ್' : 'Upload Image'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('demo')}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{language === 'kn' ? '1-ಟ್ಯಾಪ್ ಡೆಮೊ' : '1-Tap Demo'}</span>
                         </button>
                       </div>
                     </div>
@@ -545,7 +622,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
               </div>
             )}
 
-            {/* MODE 2: UPLOAD IMAGE */}
+            {/* MODE 2: UPLOAD IMAGE (scanFile) */}
             {activeTab === 'upload' && (
               <div className="space-y-3">
                 <div 
@@ -557,7 +634,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs font-bold text-white block">
-                      {language === 'kn' ? 'QR ಕೋಡ್ ಚಿತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ' : 'Choose QR Code Image'}
+                      {language === 'kn' ? 'QR ಕೋಡ್ ಚಿತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ' : 'Choose QR Code Image or Voucher PNG'}
                     </span>
                     <span className="text-[11px] text-slate-400 block">
                       {language === 'kn' ? 'PNG, JPG ಅಥವಾ ಸ್ಕ್ರೀನ್‌ಶಾಟ್ ಬೆಂಬಲಿಸುತ್ತದೆ' : 'Supports PNG, JPG, or Screenshots'}
@@ -582,6 +659,118 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                 )}
 
                 <div id="qr-file-dummy" className="w-0 h-0 overflow-hidden" />
+              </div>
+            )}
+
+            {/* MODE 3: INSTANT 1-TAP DEMO CARDS */}
+            {activeTab === 'demo' && (
+              <div className="space-y-4">
+                
+                {/* Section A: Claim Offline Voucher Cards */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <WifiOff className="w-3.5 h-3.5" />
+                      <span>{language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ವೋಚರ್ ಸ್ವೀಕರಿಸಿ (ಪರೀಕ್ಷೆ)' : 'Claim Offline Vouchers (Test Handshake)'}</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">Single Device</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {unclaimedOutboxVouchers.length > 0 ? (
+                      unclaimedOutboxVouchers.map((v) => (
+                        <button
+                          key={v.tx_id}
+                          type="button"
+                          onClick={() => handleGenerateTestVoucher(v.amount)}
+                          className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-amber-500/30 hover:border-amber-400 text-left transition cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-xs">
+                              ₹
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-white block group-hover:text-amber-300">
+                                Pending Voucher: ₹{v.amount}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono block">
+                                Ref: {v.tx_id}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                            <span>Claim</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </button>
+                      ))
+                    ) : null}
+
+                    {/* Instant Test Voucher Button */}
+                    <button
+                      type="button"
+                      disabled={generatingDemoVoucher}
+                      onClick={() => handleGenerateTestVoucher(750)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-emerald-500/10 border border-amber-500/30 hover:border-amber-400 text-left transition cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs">
+                          <Zap className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-white block group-hover:text-emerald-300">
+                            {language === 'kn' ? '₹750 ಆಫ್‌ಲೈನ್ ಪಾವತಿ ಸ್ವೀಕರಿಸಿ (ಡೆಮೊ)' : 'Simulate Claim ₹750 Offline Voucher'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Generates signed HMAC-SHA256 voucher & credits balance
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1 shrink-0">
+                        <span>{generatingDemoVoucher ? 'Signing...' : '1-Tap Claim'}</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section B: Scan to Pay Registered Users */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್ ಮಾಡಿ ಪಾವತಿಸಿ (ನೋಂದಾಯಿತ ಖಾತೆಗಳು)' : 'Scan to Pay Registered Users'}</span>
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {profiles
+                      .filter(p => p.id !== currentUser?.id)
+                      .slice(0, 4)
+                      .map((p) => {
+                        const targetId = p.walletId || p.wallet_id || p.upiId;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handlePayloadResult(targetId)}
+                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 text-left transition cursor-pointer group"
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
+                              {(p.fullName || p.full_name || 'U')[0].toUpperCase()}
+                            </div>
+                            <div className="overflow-hidden">
+                              <span className="text-xs font-bold text-white truncate block group-hover:text-indigo-300">
+                                {p.fullName || p.full_name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono truncate block">
+                                {targetId}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+
               </div>
             )}
           </>

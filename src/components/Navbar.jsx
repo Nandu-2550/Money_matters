@@ -17,7 +17,10 @@ export default function Navbar() {
     setActiveTab, 
     computedMetrics, 
     promptInstall, 
-    isInstalled
+    isInstalled,
+    isOnline,
+    offlineOutboxCount,
+    syncOfflineOutbox
   } = useWallet();
 
   const heldCount = computedMetrics.heldTransactions.length;
@@ -88,6 +91,31 @@ export default function Navbar() {
 
             {/* Right Utility Actions */}
             <div className="flex items-center gap-2">
+              {/* Online / Offline Status & Sync Count Pill */}
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs font-medium"
+                title={isOnline ? (language === 'kn' ? 'ಆನ್‌ಲೈನ್ - ಕ್ಲೌಡ್ ಸಿಂಕ್ ಸಕ್ರಿಯವಾಗಿದೆ' : 'Online - Cloud Sync Active') : (language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಮೋಡ್ - ಸುರಕ್ಷಿತ ವೋಚರ್ ಸಕ್ರಿಯವಾಗಿದೆ' : 'Offline Mode - Signed Voucher Active')}
+              >
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className={isOnline ? 'text-emerald-400 font-semibold text-[11px]' : 'text-amber-400 font-semibold text-[11px]'}>
+                  {isOnline ? (language === 'kn' ? 'ಆನ್‌ಲೈನ್' : 'Online') : (language === 'kn' ? 'ಆಫ್‌ಲೈನ್' : 'Offline')}
+                </span>
+                {offlineOutboxCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={isOnline ? () => syncOfflineOutbox?.() : undefined}
+                    className={`ml-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold transition cursor-pointer ${
+                      isOnline 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30' 
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    }`}
+                    title={isOnline ? 'Click to sync pending outbox to Supabase' : 'Pending offline payments'}
+                  >
+                    {offlineOutboxCount} {language === 'kn' ? 'ಬಾಕಿ' : 'pending'}
+                  </button>
+                )}
+              </div>
+
               {/* Install PWA Button */}
               {!isInstalled && (
                 <button
