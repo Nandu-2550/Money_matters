@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Mail, 
@@ -15,7 +15,9 @@ import {
   Languages,
   User,
   Smartphone,
-  CreditCard
+  CreditCard,
+  KeyRound,
+  RotateCw
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
@@ -26,18 +28,24 @@ export default function LoginScreen() {
     loginWithPassword, 
     registerUser, 
     sendEmailVerification, 
+    verifyEmailOtp,
+    activeOtpSession,
     language, 
     toggleLanguage, 
     t 
   } = useWallet();
 
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
-  const [useEmailOtp, setUseEmailOtp] = useState(false);
+  const [loginMethod, setLoginMethod] = useState('otp'); // 'otp' | 'mpin'
+  const [loginStep, setLoginStep] = useState('input'); // 'input' | 'otp'
 
   // Login form state
   const [loginIdentifier, setLoginIdentifier] = useState('nandunusgavai@gmail.com');
+  const [inputOtp, setInputOtp] = useState('');
   const [loginPassword, setLoginPassword] = useState('1234');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [sentDetails, setSentDetails] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Register form state
   const [regFullName, setRegFullName] = useState('');
@@ -52,7 +60,15 @@ export default function LoginScreen() {
   // Status & error states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [emailSent, setEmailSent] = useState(false);
+
+  // Cooldown countdown timer for OTP resend
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Auto-generate suggested UPI ID when full name or email changes in register mode
   const handleNameChange = (name) => {
@@ -63,30 +79,68 @@ export default function LoginScreen() {
     }
   };
 
-  // Handle Login Submit
-  const handleLoginSubmit = async (e) => {
+  // Step 1: Send OTP to Email (accepts Email or Phone Number)
+  const handleSendOtp = async (e) => {
     e?.preventDefault();
     setErrorMessage('');
 
     if (!loginIdentifier.trim()) {
-      setErrorMessage('Please enter your Email or UPI ID.');
+      setErrorMessage(
+        language === 'kn' 
+          ? 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಇಮೇಲ್ ಅಥವಾ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.' 
+          : 'Please enter your Mobile Number or Email.'
+      );
       return;
     }
 
-    if (useEmailOtp) {
-      setIsSubmitting(true);
-      const res = await sendEmailVerification(loginIdentifier);
-      setIsSubmitting(false);
+    setIsSubmitting(true);
+    const res = await sendEmailVerification(loginIdentifier);
+    setIsSubmitting(false);
 
-      if (res.success) {
-        setEmailSent(true);
-      } else {
-        setErrorMessage(res.error || 'Failed to send verification email. Try Password/MPIN login.');
-      }
+    if (res.success) {
+      setSentDetails(res);
+      setLoginStep('otp');
+      setInputOtp(res.otp || '');
+      setResendCooldown(30);
+    } else {
+      setErrorMessage(res.error || 'Failed to send OTP. Please check your details or try MPIN login.');
+    }
+  };
+
+  // Step 2: Verify OTP
+  const handleVerifyOtp = async (e) => {
+    e?.preventDefault();
+    setErrorMessage('');
+
+    const cleanOtp = inputOtp.trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setErrorMessage(
+        language === 'kn' 
+          ? 'ದಯವಿಟ್ಟು 6-ಅಂಕಿಯ OTP ಕೋಡ್ ನಮೂದಿಸಿ.' 
+          : 'Please enter the complete 6-digit OTP code.'
+      );
       return;
     }
 
-    // Password / MPIN Login
+    setIsSubmitting(true);
+    const res = verifyEmailOtp(loginIdentifier, cleanOtp);
+    setIsSubmitting(false);
+
+    if (!res.success) {
+      setErrorMessage(res.error);
+    }
+  };
+
+  // MPIN / Password Login Submit
+  const handleMpinSubmit = async (e) => {
+    e?.preventDefault();
+    setErrorMessage('');
+
+    if (!loginIdentifier.trim()) {
+      setErrorMessage('Please enter your Mobile Number, Email, or UPI ID.');
+      return;
+    }
+
     if (!loginPassword.trim()) {
       setErrorMessage('Please enter your 4-digit MPIN or password.');
       return;
@@ -248,33 +302,113 @@ export default function LoginScreen() {
           {/* 1. SIGN IN FORM */}
           {authMode === 'login' && (
             <>
-              {emailSent ? (
-                <div className="bg-slate-950 p-5 rounded-2xl border border-emerald-500/30 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-6 h-6" />
+              {loginStep === 'otp' ? (
+                /* STEP 2: ENTER OTP */
+                <div className="bg-slate-950 p-5 rounded-2xl border border-emerald-500/30 text-center space-y-4 animate-fadeIn">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-sm">
+                    <Mail className="w-6 h-6" />
                   </div>
-                  <h3 className="text-sm font-bold text-white">
-                    {t.auth.emailSentTitle}
-                  </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {t.auth.emailSentDesc.replace('{email}', loginIdentifier)}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {t.auth.checkSpamNotice}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmailSent(false);
-                      setUseEmailOtp(false);
-                    }}
-                    className="text-xs text-emerald-400 hover:underline pt-1 block mx-auto font-medium"
-                  >
-                    {t.auth.passwordLoginToggle}
-                  </button>
+
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-white">
+                      {t.auth.emailSentTitle}
+                    </h3>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      {t.auth.emailSentDesc.replace('{email}', sentDetails?.email || loginIdentifier)}
+                    </p>
+                    {sentDetails?.phone && (
+                      <span className="inline-block text-[11px] font-mono text-emerald-400 bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-full mt-0.5">
+                        {t.auth.linkedPhoneNote?.replace('{phone}', sentDetails.phone) || `Linked: ${sentDetails.phone}`}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Sandbox / Generated OTP Display with 1-Click Auto-Fill */}
+                  {(sentDetails?.otp || activeOtpSession?.otp) && (
+                    <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between text-left gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                          {language === 'kn' ? 'ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ ಪರಿಶೀಲನಾ OTP' : 'Verification OTP'}
+                        </span>
+                        <span className="text-lg font-bold font-mono tracking-widest text-emerald-400">
+                          {sentDetails?.otp || activeOtpSession?.otp}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setInputOtp(sentDetails?.otp || activeOtpSession?.otp || '')}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500 hover:text-slate-950 transition cursor-pointer shrink-0"
+                      >
+                        {t.auth.autoFillOtp || 'Auto-Fill'}
+                      </button>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleVerifyOtp} className="space-y-3.5 text-left">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5 text-center">
+                        {t.auth.otpLabel || 'Enter 6-Digit Verification Code'}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={inputOtp}
+                        onChange={(e) => setInputOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="••••••"
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-center text-xl font-mono tracking-[0.4em] text-emerald-400 font-black outline-none transition"
+                        autoFocus
+                        required
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || inputOtp.length !== 6}
+                      className="w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md shadow-emerald-500/10"
+                    >
+                      {isSubmitting ? (
+                        <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <span>{t.auth.verifyOtpBtn || 'Verify & Enter Account'}</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      <button
+                        type="button"
+                        disabled={resendCooldown > 0 || isSubmitting}
+                        onClick={handleSendOtp}
+                        className="text-slate-400 hover:text-emerald-400 transition disabled:opacity-50 flex items-center gap-1"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>
+                          {resendCooldown > 0 
+                            ? (language === 'kn' ? `${resendCooldown}ಸೆ ನಲ್ಲಿ ಮರುಕಳುಹಿಸಿ` : `Resend in ${resendCooldown}s`)
+                            : (t.auth.resendOtp || 'Resend Code')}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginStep('input');
+                          setErrorMessage('');
+                        }}
+                        className="text-slate-400 hover:text-white transition underline"
+                      >
+                        {t.auth.changeIdentifier || 'Change Mobile / Email'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               ) : (
-                <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+                /* STEP 1: INPUT IDENTIFIER */
+                <form onSubmit={loginMethod === 'otp' ? handleSendOtp : handleMpinSubmit} className="space-y-3.5">
                   {/* Mobile Number, Email or UPI ID */}
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
@@ -291,10 +425,15 @@ export default function LoginScreen() {
                         required
                       />
                     </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      {language === 'kn' 
+                        ? 'ನಿಮ್ಮ ಖಾತೆಯ ಪ್ರಾಥಮಿಕ ಕೀಲಿ: ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ಅಥವಾ ಇಮೇಲ್ ನಮೂದಿಸಿ.'
+                        : 'Primary Keys: Enter your registered Mobile (+91...) or Email.'}
+                    </span>
                   </div>
 
-                  {/* Password or MPIN Input */}
-                  {!useEmailOtp && (
+                  {/* Password or MPIN Input (When in MPIN mode) */}
+                  {loginMethod === 'mpin' && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-medium text-slate-300">
@@ -329,26 +468,39 @@ export default function LoginScreen() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md shadow-emerald-500/10"
                   >
                     {isSubmitting ? (
                       <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>{useEmailOtp ? t.auth.sendEmailBtn : t.auth.signInBtn}</span>
+                        {loginMethod === 'otp' ? (
+                          <>
+                            <Mail className="w-4 h-4" />
+                            <span>{t.auth.sendEmailBtn}</span>
+                          </>
+                        ) : (
+                          <>
+                            <KeyRound className="w-4 h-4" />
+                            <span>{t.auth.signInBtn}</span>
+                          </>
+                        )}
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </button>
 
-                  {/* Toggle between Password Login and Email Magic Link */}
+                  {/* Toggle between OTP Login and Password / MPIN Login */}
                   <div className="text-center pt-1">
                     <button
                       type="button"
-                      onClick={() => setUseEmailOtp(!useEmailOtp)}
-                      className="text-[11px] text-slate-400 hover:text-emerald-400 transition"
+                      onClick={() => {
+                        setLoginMethod(prev => prev === 'otp' ? 'mpin' : 'otp');
+                        setErrorMessage('');
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-emerald-400 transition cursor-pointer"
                     >
-                      {useEmailOtp ? t.auth.passwordLoginToggle : t.auth.sendEmailToggle}
+                      {loginMethod === 'otp' ? t.auth.passwordLoginToggle : t.auth.sendEmailToggle}
                     </button>
                   </div>
                 </form>
