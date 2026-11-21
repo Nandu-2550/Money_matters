@@ -69,40 +69,72 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     });
   }, [isOpen, activeTab, otherUsers, myWalletId]);
 
-  // Parse UPI or MM Wallet URI
+  // Parse UPI or MM Wallet URI (Case-insensitive & resilient)
   const parseWalletUri = useCallback((rawText) => {
     if (!rawText || typeof rawText !== 'string') return null;
     const trimmed = rawText.trim();
+    const lower = trimmed.toLowerCase();
 
     // 1. Check for mmwallet://pay or upi://pay URI
-    if (trimmed.startsWith('mmwallet://pay') || trimmed.startsWith('upi://pay')) {
+    if (lower.startsWith('mmwallet://pay') || lower.startsWith('upi://pay')) {
       try {
-        const dummyUrl = new URL(trimmed.replace(/^(mmwallet|upi):\/\/pay/, 'http://dummy.com'));
-        const pa = dummyUrl.searchParams.get('pa') || '';
-        const pn = dummyUrl.searchParams.get('pn') || '';
-        const am = dummyUrl.searchParams.get('am') || '';
-        return {
-          walletId: pa.trim(),
-          payeeName: decodeURIComponent(pn).trim(),
-          amount: am.trim()
-        };
+        const dummyUrl = new URL(trimmed.replace(/^(mmwallet|upi):\/\/pay/i, 'http://dummy.com'));
+        let pa = '', pn = '', am = '';
+        for (const [k, v] of dummyUrl.searchParams.entries()) {
+          const kl = k.toLowerCase();
+          if (kl === 'pa') pa = v;
+          if (kl === 'pn') pn = v;
+          if (kl === 'am') am = v;
+        }
+        if (pa) {
+          return {
+            walletId: pa.trim(),
+            payeeName: decodeURIComponent(pn || pa).trim(),
+            amount: am.trim()
+          };
+        }
       } catch {
-        const paMatch = trimmed.match(/[?&]pa=([^&]+)/);
-        const pnMatch = trimmed.match(/[?&]pn=([^&]+)/);
-        const amMatch = trimmed.match(/[?&]am=([^&]+)/);
+        const paMatch = trimmed.match(/[?&]pa=([^&]+)/i);
+        const pnMatch = trimmed.match(/[?&]pn=([^&]+)/i);
+        const amMatch = trimmed.match(/[?&]am=([^&]+)/i);
+        if (paMatch) {
+          return {
+            walletId: decodeURIComponent(paMatch[1]).trim(),
+            payeeName: pnMatch ? decodeURIComponent(pnMatch[1]).trim() : decodeURIComponent(paMatch[1]).trim(),
+            amount: amMatch ? decodeURIComponent(amMatch[1]).trim() : ''
+          };
+        }
+      }
+    }
+
+    // 2. Direct Wallet / UPI Handle (e.g. name@okaxis, user@mmwallet)
+    if (trimmed.includes('@') && !trimmed.startsWith('{')) {
+      return {
+        walletId: trimmed,
+        payeeName: trimmed.split('@')[0],
+        amount: ''
+      };
+    }
+
+    // 3. Raw URL that contains pa= (e.g. https://.../?pa=...)
+    if (lower.includes('pa=')) {
+      const paMatch = trimmed.match(/[?&]pa=([^&]+)/i);
+      const pnMatch = trimmed.match(/[?&]pn=([^&]+)/i);
+      const amMatch = trimmed.match(/[?&]am=([^&]+)/i);
+      if (paMatch) {
         return {
-          walletId: paMatch ? decodeURIComponent(paMatch[1]).trim() : '',
-          payeeName: pnMatch ? decodeURIComponent(pnMatch[1]).trim() : '',
+          walletId: decodeURIComponent(paMatch[1]).trim(),
+          payeeName: pnMatch ? decodeURIComponent(pnMatch[1]).trim() : decodeURIComponent(paMatch[1]).trim(),
           amount: amMatch ? decodeURIComponent(amMatch[1]).trim() : ''
         };
       }
     }
 
-    // 2. Direct Wallet / UPI Handle
-    if (trimmed.includes('@') && !trimmed.startsWith('{')) {
+    // 4. Return trimmed raw text if it looks like an identifier
+    if (trimmed.length > 2 && !trimmed.startsWith('{')) {
       return {
         walletId: trimmed,
-        payeeName: '',
+        payeeName: trimmed,
         amount: ''
       };
     }
@@ -209,31 +241,12 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       setScanError(
         language === 'kn'
           ? 'ಅಮಾನ್ಯವಾದ QR ಕೋಡ್! ಮಾನ್ಯವಾದ ವಾಲೆಟ್ ಅಥವಾ UPI QR ಕೋಡ್ ಅನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.'
-          : 'Invalid QR code. Please scan a valid Safe-Wallet or UPI QR code.'
+          : 'Could not extract a valid UPI ID or Wallet handle from this QR code.'
       );
       return;
     }
 
     const cleanWallet = parsed.walletId.toLowerCase();
-
-    // Closed-Loop Verification:
-    // Must be in registered profiles (by walletId or upiId), or SEBI @valid handle, or preset test handle
-    const sebiRegex = /^[a-zA-Z0-9._-]+\.(brk|mf|dp|pms|ra|ia)@valid[a-zA-Z]+$/i;
-    const isRegisteredProfile = profiles.some(
-      p => (p.walletId && p.walletId.toLowerCase() === cleanWallet) ||
-           (p.upiId && p.upiId.toLowerCase() === cleanWallet)
-    );
-    const isValidSebi = sebiRegex.test(cleanWallet);
-    const isTestPreset = cleanWallet.includes('store') || cleanWallet.includes('vip') || cleanWallet.includes('buyer') || cleanWallet.includes('zerodha') || cleanWallet.includes('bescom');
-
-    if (!isRegisteredProfile && !isValidSebi && !isTestPreset) {
-      setScanError(
-        language === 'kn'
-          ? `ಸ್ವೀಕರಿಸುವವರು (${cleanWallet}) ಮನಿ ಮ್ಯಾಟರ್ಸ್‌ನಲ್ಲಿ ನೋಂದಾಯಿಸಿಲ್ಲ. ಮುಚ್ಚಿದ-ಲೂಪ್ ವರ್ಗಾವಣೆಗಳಿಗೆ ನೋಂದಾಯಿತ ಖಾತೆ ಅಗತ್ಯವಿದೆ.`
-          : `Recipient (${cleanWallet}) is not registered on Money Matters. Closed-loop P2P requires a registered user or verified SEBI handle.`
-      );
-      return;
-    }
 
     // Lookup payee details if profile exists
     const matchedProfile = profiles.find(
@@ -269,8 +282,12 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     try {
       await stopCamera();
 
-      // Check if container element exists in DOM
-      const elem = document.getElementById('qr-camera-element');
+      // Check if container element exists in DOM (with wait if mounting)
+      let elem = document.getElementById('qr-camera-element');
+      if (!elem) {
+        await new Promise(r => setTimeout(r, 100));
+        elem = document.getElementById('qr-camera-element');
+      }
       if (!elem) {
         isStartingRef.current = false;
         return;
@@ -279,18 +296,52 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       const html5QrCode = new Html5Qrcode('qr-camera-element');
       scannerRef.current = html5QrCode;
 
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: { width: 230, height: 230 },
-          aspectRatio: 1.0
+      // Select camera: prefers rear camera on mobile, desktop webcam on laptop
+      let cameraConfig = { facingMode: 'environment' };
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          const backCam = devices.find(d => /back|rear|environment/i.test(d.label));
+          cameraConfig = backCam ? backCam.id : devices[0].id;
+        }
+      } catch (camErr) {
+        console.warn('[QRScanner] Camera enumeration note:', camErr);
+      }
+
+      const qrConfig = {
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.floor(minEdge * 0.75);
+          return {
+            width: Math.max(size, 180),
+            height: Math.max(size, 180)
+          };
         },
-        (decodedText) => {
-          handlePayloadResultRef.current?.(decodedText);
-        },
-        () => {}
-      );
+        aspectRatio: 1.0
+      };
+
+      try {
+        await html5QrCode.start(
+          cameraConfig,
+          qrConfig,
+          (decodedText) => {
+            handlePayloadResultRef.current?.(decodedText);
+          },
+          () => {}
+        );
+      } catch (firstErr) {
+        console.warn('[QRScanner] Primary camera config failed, attempting user camera fallback:', firstErr);
+        // Fallback for laptops/desktops where rear/environment camera is absent
+        await html5QrCode.start(
+          { facingMode: 'user' },
+          qrConfig,
+          (decodedText) => {
+            handlePayloadResultRef.current?.(decodedText);
+          },
+          () => {}
+        );
+      }
 
       setCameraActive(true);
     } catch (err) {
@@ -298,8 +349,10 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       setCameraActive(false);
       setCameraError(
         language === 'kn'
-          ? 'ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು "QR ಚಿತ್ರ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ" ಅಥವಾ "ತ್ವರಿತ ಡೆಮೊ QR" ಬಳಸಿ.'
-          : 'Camera unavailable or permission denied. Please use "Upload QR Image" or "Quick Demo QR".'
+          ? 'ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು "ಚಿತ್ರ ಅಪ್‌ಲೋಡ್" ಅಥವಾ "ಡೆಮೊ QR" ಬಳಸಿ.'
+          : (err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
+              ? 'Camera permission denied. Please allow camera permissions in your browser bar, or use "Upload Image" / "Demo QR".'
+              : 'Camera unavailable or not detected. Please use "Upload Image" or "Demo QR".')
       );
     } finally {
       isStartingRef.current = false;
@@ -308,18 +361,22 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
 
   // Tab change & open/close handler
   useEffect(() => {
+    let timer;
     if (!isOpen) {
       stopCamera();
       return;
     }
 
     if (activeTab === 'camera') {
-      startCamera();
+      timer = setTimeout(() => {
+        startCamera();
+      }, 50);
     } else {
       stopCamera();
     }
 
     return () => {
+      clearTimeout(timer);
       stopCamera();
     };
   }, [isOpen, activeTab, startCamera, stopCamera]);
@@ -336,9 +393,12 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       const fileScanner = new Html5Qrcode('qr-file-dummy');
       const decodedText = await fileScanner.scanFile(file, true);
       setIsProcessingFile(false);
-      handlePayloadResult(decodedText);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await fileScanner.clear().catch(() => {});
+      handlePayloadResultRef.current?.(decodedText);
     } catch (err) {
       setIsProcessingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setScanError(
         language === 'kn'
           ? 'ಈ ಚಿತ್ರದಲ್ಲಿ QR ಕೋಡ್ ಓದಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಸ್ಪಷ್ಟವಾದ QR ಚಿತ್ರವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ.'
@@ -569,7 +629,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                   </div>
                 )}
 
-                <div id="qr-file-dummy" className="hidden" />
+                <div id="qr-file-dummy" className="w-0 h-0 overflow-hidden" />
               </div>
             )}
 
