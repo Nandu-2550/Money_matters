@@ -258,8 +258,9 @@ export default function ScannerSimulator() {
     const recipient = profiles.find(p => {
       const pUpi = (p.upiId || '').toLowerCase();
       const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+      const pEmail = (p.email || '').toLowerCase();
       const pPhone = (p.phone || '').replace(/\D/g, '');
-      if (pUpi === cleanUpi || pWallet === cleanUpi) return true;
+      if (pUpi === cleanUpi || pWallet === cleanUpi || pEmail === cleanUpi) return true;
       if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
       return false;
     });

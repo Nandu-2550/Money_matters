@@ -568,11 +568,18 @@ export function WalletProvider({ children }) {
       createdAt: new Date(voucher.timestamp).toISOString()
     };
 
-    // 2. Identify sender profile if present locally
-    const senderProfile = profiles.find(p => 
-      (p.walletId && p.walletId.toLowerCase() === voucher.from_wallet.toLowerCase()) ||
-      (p.upiId && p.upiId.toLowerCase() === voucher.from_wallet.toLowerCase())
-    );
+    // 2. Identify sender profile if present locally (resilient match: walletId, upiId, email, phone)
+    const cleanFrom = (voucher.from_wallet || '').trim().toLowerCase();
+    const fromDigits = cleanFrom.replace(/\D/g, '');
+    const senderProfile = profiles.find(p => {
+      const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+      const pUpi = (p.upiId || '').toLowerCase();
+      const pEmail = (p.email || '').toLowerCase();
+      const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
+      if (pWallet === cleanFrom || pUpi === cleanFrom || pEmail === cleanFrom) return true;
+      if (fromDigits.length >= 10 && pPhoneDigits.endsWith(fromDigits.slice(-10))) return true;
+      return false;
+    });
 
     // 3. Sender Mirror Debit Transaction (OUT)
     const senderTx = {
@@ -723,10 +730,19 @@ export function WalletProvider({ children }) {
 
     // Two-Way P2P Transfer Sync (Mirror Credit for Recipient)
     if (newTx.direction === 'OUT' && newTx.status === 'VERIFIED') {
-      const recipientProfile = profiles.find(
-        p => (p.walletId && p.walletId.toLowerCase() === newTx.counterparty.toLowerCase()) ||
-             (p.upiId && p.upiId.toLowerCase() === newTx.counterparty.toLowerCase())
-      );
+      const cleanTarget = newTx.counterparty.trim().toLowerCase();
+      const targetDigits = cleanTarget.replace(/\D/g, '');
+
+      const recipientProfile = profiles.find(p => {
+        const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+        const pUpi = (p.upiId || '').toLowerCase();
+        const pEmail = (p.email || '').toLowerCase();
+        const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
+
+        if (pWallet === cleanTarget || pUpi === cleanTarget || pEmail === cleanTarget) return true;
+        if (targetDigits.length >= 10 && pPhoneDigits.endsWith(targetDigits.slice(-10))) return true;
+        return false;
+      });
 
       const mirrorCreditTx = {
         id: `tx_p2p_in_${sharedTxId}`,
@@ -805,10 +821,20 @@ export function WalletProvider({ children }) {
 
     if (approvedTx && approvedTx.direction === 'OUT') {
       const myWallet = currentUser.walletId || currentUser.upiId;
-      const recipientProfile = profiles.find(
-        p => (p.walletId && p.walletId.toLowerCase() === approvedTx.counterparty.toLowerCase()) ||
-             (p.upiId && p.upiId.toLowerCase() === approvedTx.counterparty.toLowerCase())
-      );
+      const cleanTarget = approvedTx.counterparty.trim().toLowerCase();
+      const targetDigits = cleanTarget.replace(/\D/g, '');
+
+      const recipientProfile = profiles.find(p => {
+        const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+        const pUpi = (p.upiId || '').toLowerCase();
+        const pEmail = (p.email || '').toLowerCase();
+        const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
+
+        if (pWallet === cleanTarget || pUpi === cleanTarget || pEmail === cleanTarget) return true;
+        if (targetDigits.length >= 10 && pPhoneDigits.endsWith(targetDigits.slice(-10))) return true;
+        return false;
+      });
+
       if (recipientProfile) {
         const mirrorCreditTx = {
           id: `tx_p2p_appr_${Date.now()}`,
@@ -830,6 +856,14 @@ export function WalletProvider({ children }) {
           createdAt: new Date().toISOString()
         };
         await storageService.saveNewTransaction(mirrorCreditTx);
+
+        if (isOnline) {
+          try {
+            await storageService.syncOfflineTransactionPair(approvedTx, mirrorCreditTx);
+          } catch (err) {
+            console.warn('[Sync] Failed online sync for approved transaction:', err);
+          }
+        }
       }
     }
 
