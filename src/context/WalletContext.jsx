@@ -142,13 +142,19 @@ export function WalletProvider({ children }) {
     };
   }, [showToast]);
 
-  // Supabase Auth listener
+  const profilesRef = useRef(profiles);
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
+
+  // Supabase Auth listener (Subscribes once on mount)
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session?.user?.email) {
           const userEmail = session.user.email.toLowerCase();
-          const matched = profiles.find(p => p.email.toLowerCase() === userEmail);
+          const currentProfiles = profilesRef.current;
+          const matched = currentProfiles.find(p => p.email.toLowerCase() === userEmail);
           if (matched) {
             loginAsUser(matched.id);
           } else {
@@ -180,7 +186,7 @@ export function WalletProvider({ children }) {
         subscription.unsubscribe();
       };
     }
-  }, [profiles]);
+  }, [loginAsUser]);
 
   // Load profiles on mount
   useEffect(() => {

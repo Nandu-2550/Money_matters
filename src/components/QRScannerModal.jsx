@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   X, 
   Camera, 
@@ -32,14 +32,29 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
 
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const isStartingRef = useRef(false);
+  const hasGeneratedDemoVoucherRef = useRef(false);
 
-  // Other registered users for instant 1-click test cards
-  const otherUsers = profiles.filter(p => p.id !== currentUser?.id);
+  const onScanSuccessRef = useRef(onScanSuccess);
+  onScanSuccessRef.current = onScanSuccess;
+
+  const onClaimVoucherRef = useRef(onClaimVoucher);
+  onClaimVoucherRef.current = onClaimVoucher;
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Memoize other registered users for instant 1-click test cards
+  const otherUsers = useMemo(() => {
+    return profiles.filter(p => p.id !== currentUser?.id);
+  }, [profiles, currentUser?.id]);
+
   const myWalletId = currentUser?.walletId || currentUser?.upiId || 'user@mmwallet';
 
-  // Generate a pre-signed demo voucher addressed to CURRENT user from first other user
+  // Generate a pre-signed demo voucher addressed to CURRENT user ONLY when demo tab is viewed
   useEffect(() => {
-    if (!isOpen || otherUsers.length === 0) return;
+    if (!isOpen || activeTab !== 'demo' || hasGeneratedDemoVoucherRef.current || otherUsers.length === 0) return;
+    hasGeneratedDemoVoucherRef.current = true;
     const sender = otherUsers[0];
     const senderWalletId = sender.walletId || sender.upiId;
     signOfflineVoucher({
@@ -47,8 +62,12 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       from_wallet: senderWalletId,
       to_wallet: myWalletId,
       amount: 1500
-    }).then(v => setDemoSampleVoucher(v));
-  }, [isOpen, otherUsers, myWalletId]);
+    }).then(v => {
+      setDemoSampleVoucher(v);
+    }).catch(err => {
+      console.warn('[Demo Voucher] Signing error:', err);
+    });
+  }, [isOpen, activeTab, otherUsers, myWalletId]);
 
   // Parse UPI or MM Wallet URI
   const parseWalletUri = useCallback((rawText) => {
@@ -89,6 +108,23 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     }
 
     return null;
+  }, []);
+
+  // Stop camera helper
+  const stopCamera = useCallback(async () => {
+    isStartingRef.current = false;
+    if (scannerRef.current) {
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear();
+      } catch (err) {
+        // ignore already stopped
+      }
+      scannerRef.current = null;
+    }
+    setCameraActive(false);
   }, []);
 
   // Handle Scanning Result (Dual Mode: Offline Voucher QR or Standard Payee QR)
@@ -142,9 +178,9 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
         }
 
         // 4. Success! Claim the voucher
-        stopCamera();
-        if (onClaimVoucher) {
-          await onClaimVoucher(voucher);
+        await stopCamera();
+        if (onClaimVoucherRef.current) {
+          await onClaimVoucherRef.current(voucher);
         }
 
         setClaimSuccessData({
@@ -208,41 +244,36 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     const finalHandle = matchedProfile ? (matchedProfile.walletId || matchedProfile.upiId) : parsed.walletId;
 
     // Success! Stop camera if running, then trigger callback
-    stopCamera();
-    if (onScanSuccess) {
-      onScanSuccess({
+    await stopCamera();
+    if (onScanSuccessRef.current) {
+      onScanSuccessRef.current({
         upiId: finalHandle,
         walletId: finalHandle,
         payeeName: finalName,
         amount: parsed.amount || ''
       });
     }
-    onClose();
-  }, [parseWalletUri, profiles, language, onScanSuccess, onClaimVoucher, onClose, myWalletId]);
+    onCloseRef.current?.();
+  }, [parseWalletUri, profiles, language, stopCamera, myWalletId]);
 
-  // Stop camera helper
-  const stopCamera = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch (err) {
-        // ignore already stopped
-      }
-      scannerRef.current = null;
-    }
-    setCameraActive(false);
-  }, []);
+  const handlePayloadResultRef = useRef(handlePayloadResult);
+  handlePayloadResultRef.current = handlePayloadResult;
 
   // Start Live Camera
   const startCamera = useCallback(async () => {
+    if (isStartingRef.current) return;
+    isStartingRef.current = true;
     setCameraError('');
     setScanError('');
-    setClaimSuccessData(null);
 
     try {
-      if (scannerRef.current) {
-        await stopCamera();
+      await stopCamera();
+
+      // Check if container element exists in DOM
+      const elem = document.getElementById('qr-camera-element');
+      if (!elem) {
+        isStartingRef.current = false;
+        return;
       }
 
       const html5QrCode = new Html5Qrcode('qr-camera-element');
@@ -256,11 +287,9 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           aspectRatio: 1.0
         },
         (decodedText) => {
-          handlePayloadResult(decodedText);
+          handlePayloadResultRef.current?.(decodedText);
         },
-        (errorMessage) => {
-          // ignore scan frame errors
-        }
+        () => {}
       );
 
       setCameraActive(true);
@@ -272,13 +301,15 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           ? 'ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು "QR ಚಿತ್ರ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ" ಅಥವಾ "ತ್ವರಿತ ಡೆಮೊ QR" ಬಳಸಿ.'
           : 'Camera unavailable or permission denied. Please use "Upload QR Image" or "Quick Demo QR".'
       );
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [stopCamera, handlePayloadResult, language]);
+  }, [stopCamera, language]);
 
-  // Tab change handler
+  // Tab change & open/close handler
   useEffect(() => {
     if (!isOpen) {
-      setClaimSuccessData(null);
+      stopCamera();
       return;
     }
 
@@ -320,6 +351,9 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
   const handleModalClose = () => {
     stopCamera();
     setClaimSuccessData(null);
+    setScanError('');
+    setCameraError('');
+    hasGeneratedDemoVoucherRef.current = false;
     onClose();
   };
 

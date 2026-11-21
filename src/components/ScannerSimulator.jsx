@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   ShieldCheck, 
   ShieldAlert, 
@@ -67,8 +67,10 @@ export default function ScannerSimulator() {
   const [successData, setSuccessData] = useState(null);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
 
-  // Other registered users for contacts bar
-  const otherUsers = profiles.filter(p => p.id !== currentUser?.id);
+  // Other registered users for contacts bar (memoized)
+  const otherUsers = useMemo(() => {
+    return profiles.filter(p => p.id !== currentUser?.id);
+  }, [profiles, currentUser?.id]);
 
   // Quick Action 1: Scan Any QR
   const handleActionScanQR = () => {
@@ -776,44 +778,54 @@ export default function ScannerSimulator() {
       </div>
 
       {/* MODAL 1: QR Scanner Modal */}
-      <QRScannerModal
-        isOpen={showQRScanner}
-        onClose={() => setShowQRScanner(false)}
-        onScanSuccess={handleQRScanSuccess}
-        onClaimVoucher={claimOfflineVoucher}
-      />
+      {showQRScanner && (
+        <QRScannerModal
+          isOpen={showQRScanner}
+          onClose={() => setShowQRScanner(false)}
+          onScanSuccess={handleQRScanSuccess}
+          onClaimVoucher={claimOfflineVoucher}
+        />
+      )}
 
       {/* MODAL 2: Receive QR Modal */}
-      <ReceiveQRModal
-        isOpen={showReceiveQR}
-        onClose={() => setShowReceiveQR(false)}
-      />
+      {showReceiveQR && (
+        <ReceiveQRModal
+          isOpen={showReceiveQR}
+          onClose={() => setShowReceiveQR(false)}
+        />
+      )}
 
       {/* MODAL 3: Simulated 4-Digit PIN Modal */}
-      <DemoPinModal
-        isOpen={showPinModal}
-        onClose={() => setShowPinModal(false)}
-        onSuccess={handlePinSuccess}
-        mode={pinModalMode}
-        amount={pendingTransfer?.amount}
-        payeeName={pendingTransfer?.payeeName}
-        payeeUpi={pendingTransfer?.counterparty}
-      />
+      {showPinModal && (
+        <DemoPinModal
+          isOpen={showPinModal}
+          onClose={() => setShowPinModal(false)}
+          onSuccess={handlePinSuccess}
+          mode={pinModalMode}
+          amount={pendingTransfer?.amount}
+          payeeName={pendingTransfer?.payeeName}
+          payeeUpi={pendingTransfer?.counterparty}
+        />
+      )}
 
       {/* MODAL 4: Safe-Wallet Top-Up Modal */}
-      <TopUpModal
-        isOpen={isTopUpModalOpen}
-        onClose={() => setIsTopUpModalOpen(false)}
-        onConfirm={topUpWallet}
-        onProceedTopUp={topUpWallet}
-      />
+      {isTopUpModalOpen && (
+        <TopUpModal
+          isOpen={isTopUpModalOpen}
+          onClose={() => setIsTopUpModalOpen(false)}
+          onConfirm={topUpWallet}
+          onProceedTopUp={topUpWallet}
+        />
+      )}
 
       {/* MODAL 5: Signed Offline Payment Voucher QR Modal */}
-      <OfflineVoucherModal
-        isOpen={showVoucherModal}
-        onClose={() => setShowVoucherModal(false)}
-        voucher={activeVoucher}
-      />
+      {showVoucherModal && (
+        <OfflineVoucherModal
+          isOpen={showVoucherModal}
+          onClose={() => setShowVoucherModal(false)}
+          voucher={activeVoucher}
+        />
+      )}
 
       {/* MODAL 4: PhonePe Green "Payment Successful" Modal */}
       {showSuccessModal && successData && (
