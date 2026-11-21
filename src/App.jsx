@@ -70,7 +70,11 @@ function MainApp() {
       <footer className="border-t border-slate-900 py-6 text-xs text-slate-400">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2 text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <img 
+              src="/logo.png" 
+              alt="Logo" 
+              className="w-5 h-5 rounded-md object-cover border border-slate-700/60" 
+            />
             <span className="font-semibold text-slate-300">Money Matters</span>
             <span>• Two-Way Payment Security</span>
           </div>

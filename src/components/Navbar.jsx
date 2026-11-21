@@ -94,8 +94,21 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-3">
             
-            {/* Left: PhonePe-Style Profile Button + Online Status Pill */}
-            <div className="flex items-center gap-2.5">
+            {/* Left: App Brand Logo + PhonePe-Style Profile Button + Status Pill */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Brand Logo */}
+              <div className="flex items-center gap-2 pr-2 border-r border-slate-800">
+                <img 
+                  src="/logo.png" 
+                  alt="Money Matters Logo" 
+                  className="w-9 h-9 rounded-xl object-cover shadow-sm border border-slate-700/60 hover:scale-105 transition" 
+                />
+                <div className="hidden lg:block leading-tight">
+                  <span className="text-xs font-bold text-white block">Money Matters</span>
+                  <span className="text-[9px] text-emerald-400 font-semibold block">Safe Wallet</span>
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}

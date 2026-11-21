@@ -219,9 +219,11 @@ export default function LoginScreen() {
       {/* Top Header with App Logo & Language Switcher */}
       <div className="max-w-md w-full mx-auto flex items-center justify-between pt-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="Money Matters" 
+            className="w-8 h-8 rounded-xl object-cover shadow-sm border border-slate-700/60" 
+          />
           <div>
             <span className="font-bold text-sm tracking-tight text-white block leading-none">
               {t.appName}
@@ -244,6 +246,15 @@ export default function LoginScreen() {
       {/* Main Container Card */}
       <div className="max-w-md w-full mx-auto my-auto py-6">
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xl space-y-5">
+          
+          {/* Centered Brand Icon */}
+          <div className="flex justify-center -mb-1">
+            <img 
+              src="/logo.png" 
+              alt="Money Matters App Logo" 
+              className="w-16 h-16 rounded-2xl object-cover shadow-lg border border-slate-700/80 hover:scale-105 transition"
+            />
+          </div>
           
           {/* PhonePe-Style Mode Toggle Pill (Sign In vs Register) */}
           <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800">
