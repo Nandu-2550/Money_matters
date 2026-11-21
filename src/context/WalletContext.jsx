@@ -265,55 +265,63 @@ export function WalletProvider({ children }) {
 
   // Register New User
   const registerUser = useCallback(async (formData) => {
-    const cleanEmail = (formData.email || '').trim().toLowerCase();
-    const cleanWallet = (formData.walletId || formData.upiId || '').trim().toLowerCase();
-    const cleanPhone = (formData.phone || '').trim();
-    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    try {
+      const cleanEmail = (formData.email || '').trim().toLowerCase();
+      const cleanWallet = (formData.walletId || formData.upiId || '').trim().toLowerCase();
+      const cleanPhone = (formData.phone || '').trim();
+      const phoneDigits = cleanPhone.replace(/\D/g, '');
 
-    const exists = profiles.some(p => {
-      const pEmail = (p.email || '').toLowerCase();
-      const pUpi = (p.upiId || '').toLowerCase();
-      const pWallet = (p.walletId || '').toLowerCase();
-      const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
+      const exists = profiles.some(p => {
+        const pEmail = (p.email || '').toLowerCase();
+        const pUpi = (p.upiId || '').toLowerCase();
+        const pWallet = (p.walletId || '').toLowerCase();
+        const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
 
-      if (pEmail === cleanEmail) return true;
-      if (pWallet === cleanWallet || pUpi === cleanWallet) return true;
-      if (phoneDigits.length >= 10 && pPhoneDigits.endsWith(phoneDigits.slice(-10))) return true;
-      return false;
-    });
+        if (pEmail === cleanEmail) return true;
+        if (pWallet === cleanWallet || pUpi === cleanWallet) return true;
+        if (phoneDigits.length >= 10 && pPhoneDigits.endsWith(phoneDigits.slice(-10))) return true;
+        return false;
+      });
 
-    if (exists) {
-      return { 
-        success: false, 
-        error: language === 'kn'
-          ? 'ಈ ವಿವರಗಳೊಂದಿಗೆ ಈಗಾಗಲೇ ವಾಲೆಟ್ ಖಾತೆ ಇದೆ.'
-          : 'An account with this Mobile, Email, or Wallet ID already exists.' 
+      if (exists) {
+        return { 
+          success: false, 
+          error: language === 'kn'
+            ? 'ಈ ವಿವರಗಳೊಂದಿಗೆ ಈಗಾಗಲೇ ವಾಲೆಟ್ ಖಾತೆ ಇದೆ.'
+            : 'An account with this Mobile, Email, or Wallet ID already exists.' 
+        };
+      }
+
+      const newProfile = {
+        id: `usr_${Date.now()}`,
+        fullName: formData.fullName.trim(),
+        email: cleanEmail,
+        walletId: cleanWallet.includes('@') ? cleanWallet : `${cleanWallet}@mmwallet`,
+        upiId: cleanWallet.includes('@') ? cleanWallet : `${cleanWallet}@mmwallet`,
+        phone: cleanPhone,
+        bankName: formData.bankName?.trim() || 'Primary Linked Bank',
+        accountLast4: formData.accountLast4?.trim() || '1234',
+        startingBalance: 5000,
+        avatarInitials: (formData.fullName.trim()[0] || 'U').toUpperCase(),
+        password: formData.password?.trim() || '1234',
+        demoPin: formData.demoPin || formData.password?.trim() || '1234',
+        demo_pin: formData.demoPin || formData.password?.trim() || '1234',
+        createdAt: new Date().toISOString()
+      };
+
+      const saved = await storageService.createProfile(newProfile);
+      setProfiles(prev => [...prev, saved]);
+      loginAsUser(saved.id);
+
+      showToast(`Welcome ${saved.fullName}! Safe-Wallet opened with ₹5,000 balance.`, 'success');
+      return { success: true, profile: saved };
+    } catch (err) {
+      console.error('[MoneyMatters] Registration failed:', err);
+      return {
+        success: false,
+        error: err?.message || 'Registration failed. Please try again.'
       };
     }
-
-    const newProfile = {
-      id: `usr_${Date.now()}`,
-      fullName: formData.fullName.trim(),
-      email: cleanEmail,
-      walletId: cleanWallet.includes('@') ? cleanWallet : `${cleanWallet}@mmwallet`,
-      upiId: cleanWallet.includes('@') ? cleanWallet : `${cleanWallet}@mmwallet`,
-      phone: cleanPhone,
-      bankName: formData.bankName?.trim() || 'Primary Linked Bank',
-      accountLast4: formData.accountLast4?.trim() || '1234',
-      startingBalance: 5000,
-      avatarInitials: (formData.fullName.trim()[0] || 'U').toUpperCase(),
-      password: formData.password?.trim() || '1234',
-      demoPin: formData.demoPin || formData.password?.trim() || '1234',
-      demo_pin: formData.demoPin || formData.password?.trim() || '1234',
-      createdAt: new Date().toISOString()
-    };
-
-    const saved = await storageService.createProfile(newProfile);
-    setProfiles(prev => [...prev, saved]);
-    loginAsUser(saved.id);
-
-    showToast(`Welcome ${saved.fullName}! Safe-Wallet opened with ₹5,000 balance.`, 'success');
-    return { success: true, profile: saved };
   }, [profiles, loginAsUser, showToast, language]);
 
   // Logout

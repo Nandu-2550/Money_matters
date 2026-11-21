@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (typeof process !== 'undefined' && process.env ? process.env : {});
+const supabaseUrl = env.VITE_SUPABASE_URL;
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
@@ -218,7 +219,10 @@ const ACTIVE_USER_KEY = 'money_matters_active_user_v3';
 
 export const storageService = {
   isCloudConnected() {
-    return isSupabaseConfigured && typeof navigator !== 'undefined' && navigator.onLine;
+    return Boolean(
+      isSupabaseConfigured && 
+      (typeof navigator === 'undefined' || navigator.onLine !== false)
+    );
   },
 
   async getActiveUserId() {
@@ -271,12 +275,144 @@ export const storageService = {
       // Priority 3: Newly registered local profiles
       localList.forEach(p => combinedMap.set(p.id, p));
 
+      // Self-healing cloud sync: if any locally registered profile is missing from Supabase, sync it now!
+      if (this.isCloudConnected() && supabase) {
+        const cloudIds = new Set(cloudProfiles.map(p => p.id));
+        localList.forEach(localProf => {
+          if (localProf && localProf.id && !cloudIds.has(localProf.id) && localProf.id !== 'usr_nandeesh' && localProf.id !== 'usr_anjaneya') {
+            this.syncProfileToSupabase(localProf).catch(e => {
+              console.warn('[MoneyMatters] Background profile sync deferred:', e);
+            });
+          }
+        });
+      }
+
       const merged = Array.from(combinedMap.values());
       localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(merged));
       return merged;
     } catch {
       return DEFAULT_PROFILES;
     }
+  },
+
+  async syncProfileToSupabase(profile) {
+    if (!this.isCloudConnected() || !supabase) return false;
+
+    // 1. Attempt Supabase Auth user registration (swallows non-blocking mail/rate errors)
+    try {
+      if (profile.email && profile.password) {
+        await supabase.auth.signUp({
+          email: profile.email.trim(),
+          password: profile.password.length >= 6 ? profile.password : `${profile.password}1234`,
+          options: {
+            data: {
+              full_name: profile.fullName,
+              phone: profile.phone,
+              wallet_id: profile.walletId || profile.wallet_id
+            }
+          }
+        });
+      }
+    } catch (authErr) {
+      console.warn('[MoneyMatters] Supabase auth.signUp note:', authErr?.message || authErr);
+    }
+
+    // 2. Full upgraded schema payload
+    const fullPayload = {
+      id: profile.id,
+      full_name: profile.fullName,
+      email: profile.email,
+      wallet_id: profile.walletId || profile.wallet_id || `${profile.email.split('@')[0]}@mmwallet`,
+      upi_id: profile.walletId || profile.upiId,
+      phone: profile.phone,
+      bank_name: profile.bankName || 'Safe-Wallet Vault',
+      account_last4: profile.accountLast4 || '8800',
+      starting_balance: profile.startingBalance,
+      avatar_initials: profile.avatarInitials,
+      password: profile.password || '1234',
+      demo_pin: profile.demoPin || profile.demo_pin || '0000',
+      created_at: profile.createdAt || new Date().toISOString()
+    };
+
+    const { error: pErr } = await supabase.from('profiles').upsert(fullPayload);
+    if (pErr) {
+      console.warn('[MoneyMatters] Supabase profiles full upsert note:', pErr.message);
+      // Fallback for live schema without demo_pin / wallet_id
+      const basePayload = {
+        id: profile.id,
+        full_name: profile.fullName,
+        email: profile.email,
+        upi_id: profile.walletId || profile.upiId,
+        phone: profile.phone,
+        bank_name: profile.bankName || 'Safe-Wallet Vault',
+        account_last4: profile.accountLast4 || '8800',
+        starting_balance: profile.startingBalance,
+        avatar_initials: profile.avatarInitials,
+        password: profile.password || '1234',
+        created_at: profile.createdAt || new Date().toISOString()
+      };
+      const { error: fbErr } = await supabase.from('profiles').upsert(basePayload);
+      if (fbErr) {
+        console.error('[MoneyMatters] Supabase profiles base fallback error:', fbErr);
+        return false;
+      }
+    }
+
+    console.log('[MoneyMatters] Profile synced successfully to Supabase:', profile.id, profile.email);
+    return true;
+  },
+
+  async syncTransactionToSupabase(tx) {
+    if (!this.isCloudConnected() || !supabase) return false;
+
+    const fullTx = {
+      id: tx.id,
+      tx_id: tx.txId || tx.id,
+      user_id: tx.userId,
+      direction: tx.direction,
+      amount: tx.amount,
+      counterparty: tx.counterparty,
+      counterparty_wallet_id: tx.counterpartyWalletId || tx.counterparty,
+      category: tx.category || 'Transfer',
+      tx_category: tx.txCategory || 'P2P_TRANSFER',
+      message: tx.message || '',
+      risk_score: tx.riskScore ?? 0,
+      risk_level: tx.riskLevel || 'SAFE',
+      status: tx.status || 'VERIFIED',
+      reasons: tx.reasons || [],
+      is_collect_request: Boolean(tx.isCollectRequest),
+      is_offline_queued: Boolean(tx.isOfflineQueued),
+      voucher_signature: tx.voucherSignature || null,
+      created_at: tx.createdAt || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error: tErr } = await supabase.from('transactions').upsert(fullTx);
+    if (tErr) {
+      // Fallback for live schema without tx_id, counterparty_wallet_id, tx_category, is_offline_queued, voucher_signature
+      const baseTx = {
+        id: tx.id,
+        user_id: tx.userId,
+        direction: tx.direction,
+        amount: tx.amount,
+        counterparty: tx.counterparty,
+        category: tx.category || 'Transfer',
+        message: tx.message || '',
+        risk_score: tx.riskScore ?? 0,
+        risk_level: tx.riskLevel || 'SAFE',
+        status: tx.status || 'VERIFIED',
+        reasons: tx.reasons || [],
+        is_collect_request: Boolean(tx.isCollectRequest),
+        created_at: tx.createdAt || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      const { error: fbErr } = await supabase.from('transactions').upsert(baseTx);
+      if (fbErr) {
+        console.warn('[MoneyMatters] Supabase transaction fallback error:', fbErr);
+        return false;
+      }
+    }
+    return true;
   },
 
   async createProfile(newProfile) {
@@ -287,11 +423,14 @@ export const storageService = {
     // Initialize initial welcome transaction for the new user
     const welcomeTx = {
       id: `tx_welcome_${Date.now()}`,
+      txId: `tx_welcome_${Date.now()}`,
       userId: newProfile.id,
       direction: 'IN',
       amount: newProfile.startingBalance,
-      counterparty: 'reserve.sandbox@fintech',
+      counterparty: 'Safe-Wallet Primary Vault',
+      counterpartyWalletId: 'vault@mmwallet',
       category: 'Salary',
+      txCategory: 'TOPUP',
       message: 'Demo Sandbox Initial Account Setup Credit',
       riskScore: 0,
       riskLevel: 'SAFE',
@@ -299,55 +438,16 @@ export const storageService = {
       reasons: ['Initial demo sandbox balance allocation.'],
       reasonsKn: ['ಖಾತೆ ತೆರೆದ ಆರಂಭಿಕ ಡೆಮೊ ಹಣ ಜಮೆ.'],
       isCollectRequest: false,
+      isOfflineQueued: false,
       createdAt: new Date().toISOString()
     };
     this.saveLocalUserTransactions(newProfile.id, [welcomeTx]);
 
-    // Sync to Supabase in background if available
+    // Sync to Supabase in background or synchronously
     if (this.isCloudConnected() && supabase) {
       try {
-        const profilePayload = {
-          id: newProfile.id,
-          full_name: newProfile.fullName,
-          email: newProfile.email,
-          wallet_id: newProfile.walletId || newProfile.wallet_id || `${newProfile.email.split('@')[0]}@mmwallet`,
-          upi_id: newProfile.walletId || newProfile.upiId,
-          phone: newProfile.phone,
-          bank_name: newProfile.bankName || 'Safe-Wallet Vault',
-          account_last4: newProfile.accountLast4 || '8800',
-          starting_balance: newProfile.startingBalance,
-          avatar_initials: newProfile.avatarInitials,
-          password: newProfile.password || '1234',
-          demo_pin: newProfile.demoPin || newProfile.demo_pin || '0000',
-          created_at: newProfile.createdAt
-        };
-
-        const { error: pErr } = await supabase.from('profiles').upsert(profilePayload);
-        if (pErr && pErr.message && (pErr.message.includes('demo_pin') || pErr.message.includes('wallet_id'))) {
-          const fallbackPayload = { ...profilePayload };
-          delete fallbackPayload.demo_pin;
-          delete fallbackPayload.wallet_id;
-          await supabase.from('profiles').upsert(fallbackPayload);
-        }
-
-        await supabase.from('transactions').upsert({
-          id: welcomeTx.id,
-          tx_id: welcomeTx.txId || welcomeTx.id,
-          user_id: welcomeTx.userId,
-          direction: welcomeTx.direction,
-          amount: welcomeTx.amount,
-          counterparty: welcomeTx.counterparty,
-          counterparty_wallet_id: welcomeTx.counterpartyWalletId || 'vault@mmwallet',
-          category: welcomeTx.category,
-          tx_category: welcomeTx.txCategory || 'TOPUP',
-          message: welcomeTx.message,
-          risk_score: welcomeTx.riskScore,
-          risk_level: welcomeTx.riskLevel,
-          status: welcomeTx.status,
-          reasons: welcomeTx.reasons,
-          is_collect_request: false,
-          created_at: welcomeTx.createdAt
-        });
+        await this.syncProfileToSupabase(newProfile);
+        await this.syncTransactionToSupabase(welcomeTx);
       } catch (err) {
         console.warn('[MoneyMatters] Supabase profile sync deferred:', err);
       }
@@ -416,27 +516,7 @@ export const storageService = {
 
     if (this.isCloudConnected() && supabase) {
       try {
-        await supabase.from('transactions').upsert({
-          id: tx.id,
-          tx_id: tx.txId || tx.id,
-          user_id: tx.userId,
-          direction: tx.direction,
-          amount: tx.amount,
-          counterparty: tx.counterparty,
-          counterparty_wallet_id: tx.counterpartyWalletId || tx.counterparty,
-          category: tx.category,
-          tx_category: tx.txCategory || 'P2P_TRANSFER',
-          message: tx.message || '',
-          risk_score: tx.riskScore,
-          risk_level: tx.riskLevel,
-          status: tx.status,
-          reasons: tx.reasons,
-          is_collect_request: Boolean(tx.isCollectRequest),
-          is_offline_queued: Boolean(tx.isOfflineQueued),
-          voucher_signature: tx.voucherSignature || null,
-          created_at: tx.createdAt,
-          updated_at: new Date().toISOString()
-        });
+        await this.syncTransactionToSupabase(tx);
       } catch (err) {
         console.warn('[MoneyMatters] Supabase insert deferred:', err);
       }
@@ -446,34 +526,9 @@ export const storageService = {
   async syncOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
     if (!this.isCloudConnected() || !supabase) return false;
     try {
-      const rows = [senderDebitTx, receiverCreditTx].map(tx => ({
-        id: tx.id,
-        tx_id: tx.txId || tx.id,
-        user_id: tx.userId,
-        direction: tx.direction,
-        amount: tx.amount,
-        counterparty: tx.counterparty,
-        counterparty_wallet_id: tx.counterpartyWalletId || tx.counterparty,
-        category: tx.category || 'Transfer',
-        tx_category: tx.txCategory || 'P2P_TRANSFER',
-        message: tx.message || '',
-        risk_score: tx.riskScore || 0,
-        risk_level: tx.riskLevel || 'SAFE',
-        status: tx.status || 'VERIFIED',
-        reasons: tx.reasons || [],
-        is_collect_request: Boolean(tx.isCollectRequest),
-        is_offline_queued: false,
-        voucher_signature: tx.voucherSignature || null,
-        created_at: tx.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      const { error } = await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
-      if (error) {
-        console.warn('[MoneyMatters] syncOfflineTransactionPair error:', error);
-        return false;
-      }
-      return true;
+      const sOk = await this.syncTransactionToSupabase(senderDebitTx);
+      const rOk = await this.syncTransactionToSupabase(receiverCreditTx);
+      return sOk && rOk;
     } catch (err) {
       console.warn('[MoneyMatters] syncOfflineTransactionPair exception:', err);
       return false;
