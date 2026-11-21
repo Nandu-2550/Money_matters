@@ -83,6 +83,19 @@ export default function ScannerSimulator() {
     setIsCollectRequest(false);
     setScanResult(null);
     setFormError('');
+    setTimeout(() => {
+      const inputEl = document.getElementById('transfer-upi-input');
+      if (inputEl) {
+        inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        inputEl.focus();
+      }
+    }, 50);
+    showToast(
+      language === 'kn'
+        ? 'ಮೊಬೈಲ್ ಅಥವಾ UPI ID ನಮೂದಿಸಿ ಹಣ ಕಳುಹಿಸಿ'
+        : 'Enter Mobile Number or UPI ID to send money',
+      'info'
+    );
   };
 
   // Quick Action 3: Check Balance (Triggers Demo PIN first)
@@ -182,15 +195,24 @@ export default function ScannerSimulator() {
     // Closed-loop verification for OUT transfers
     if (direction === 'OUT') {
       const cleanUpi = counterparty.trim().toLowerCase();
+      const cleanDigits = cleanUpi.replace(/\D/g, '');
       const sebiRegex = /^[a-zA-Z0-9._-]+\.(brk|mf|dp|pms|ra|ia)@valid[a-zA-Z]+$/i;
-      const isRegistered = profiles.some(p => p.upiId.toLowerCase() === cleanUpi);
+      const isRegistered = profiles.some(p => {
+        const pUpi = (p.upiId || '').toLowerCase();
+        const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+        const pEmail = (p.email || '').toLowerCase();
+        const pPhone = (p.phone || '').replace(/\D/g, '');
+        if (pUpi === cleanUpi || pWallet === cleanUpi || pEmail === cleanUpi) return true;
+        if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
+        return false;
+      });
       const isValidSebi = sebiRegex.test(cleanUpi);
       const isPreset = cleanUpi.includes('store') || cleanUpi.includes('vip') || cleanUpi.includes('buyer') || cleanUpi.includes('zerodha') || cleanUpi.includes('bescom');
 
       if (!isRegistered && !isValidSebi && !isPreset) {
         setFormError(
           t.scanner.closedLoopError ||
-          'Recipient is not registered on Money Matters. Closed-loop transfers require a registered user or verified SEBI handle.'
+          'Recipient is not registered on Money Matters. Closed-loop transfers require a registered user, mobile number, or verified SEBI handle.'
         );
         return;
       }
@@ -206,7 +228,16 @@ export default function ScannerSimulator() {
       }
     }
 
-    const recipient = profiles.find(p => p.upiId.toLowerCase() === counterparty.trim().toLowerCase());
+    const cleanUpi = counterparty.trim().toLowerCase();
+    const cleanDigits = cleanUpi.replace(/\D/g, '');
+    const recipient = profiles.find(p => {
+      const pUpi = (p.upiId || '').toLowerCase();
+      const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+      const pPhone = (p.phone || '').replace(/\D/g, '');
+      if (pUpi === cleanUpi || pWallet === cleanUpi) return true;
+      if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
+      return false;
+    });
     const payeeName = recipient ? recipient.fullName : counterparty.trim();
 
     setPendingTransfer({
@@ -550,6 +581,7 @@ export default function ScannerSimulator() {
                 </button>
               </div>
               <input
+                id="transfer-upi-input"
                 type="text"
                 value={counterparty}
                 onChange={(e) => setCounterparty(e.target.value)}
@@ -808,15 +840,7 @@ export default function ScannerSimulator() {
         />
       )}
 
-      {/* MODAL 4: Safe-Wallet Top-Up Modal */}
-      {isTopUpModalOpen && (
-        <TopUpModal
-          isOpen={isTopUpModalOpen}
-          onClose={() => setIsTopUpModalOpen(false)}
-          onConfirm={topUpWallet}
-          onProceedTopUp={topUpWallet}
-        />
-      )}
+
 
       {/* MODAL 5: Signed Offline Payment Voucher QR Modal */}
       {showVoucherModal && (

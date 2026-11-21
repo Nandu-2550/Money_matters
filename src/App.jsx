@@ -6,10 +6,19 @@ import ReviewQueue from './components/ReviewQueue';
 import MoneyFlowDashboard from './components/MoneyFlowDashboard';
 import LoginScreen from './components/LoginScreen';
 import ProfileModal from './components/ProfileModal';
+import TopUpModal from './components/TopUpModal';
 import { ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 
 function MainApp() {
-  const { activeTab, notification, language, isAuthenticated } = useWallet();
+  const { 
+    activeTab, 
+    notification, 
+    language, 
+    isAuthenticated,
+    isTopUpModalOpen,
+    setIsTopUpModalOpen,
+    topUpWallet
+  } = useWallet();
 
   // If user is not yet verified or logged in, show PhonePe login screen
   if (!isAuthenticated) {
@@ -23,6 +32,16 @@ function MainApp() {
 
       {/* Profile & Linked Bank Drawer Modal */}
       <ProfileModal />
+
+      {/* Global Top-Up Safe-Wallet Modal */}
+      {isTopUpModalOpen && (
+        <TopUpModal
+          isOpen={isTopUpModalOpen}
+          onClose={() => setIsTopUpModalOpen(false)}
+          onConfirm={topUpWallet}
+          onProceedTopUp={topUpWallet}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
