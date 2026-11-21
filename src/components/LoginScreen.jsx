@@ -106,25 +106,51 @@ export default function LoginScreen() {
     e?.preventDefault();
     setErrorMessage('');
 
-    if (!regFullName.trim() || !regEmail.trim() || !regUpiId.trim()) {
-      setErrorMessage('Please fill in your Name, Email, and desired UPI ID.');
+    if (!regFullName.trim()) {
+      setErrorMessage(language === 'kn' ? 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.' : 'Please enter your Full Name.');
       return;
     }
 
-    if (!regUpiId.includes('@')) {
-      setErrorMessage('Please enter a valid UPI ID (e.g., yourname@okaxis or yourname@oksbi).');
+    const cleanPhoneDigits = regPhone.replace(/\D/g, '');
+    if (!cleanPhoneDigits || cleanPhoneDigits.length < 10) {
+      setErrorMessage(language === 'kn' 
+        ? 'ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ 10-ಅಂಕಿಯ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.' 
+        : 'Please enter a valid 10-digit mobile number.');
       return;
     }
+
+    if (!regEmail.trim()) {
+      setErrorMessage(language === 'kn' ? 'ದಯವಿಟ್ಟು ಇಮೇಲ್ ವಿಳಾಸವನ್ನು ನಮೂದಿಸಿ.' : 'Please enter your email address.');
+      return;
+    }
+
+    if (!regUpiId.trim() || !regUpiId.includes('@')) {
+      setErrorMessage(language === 'kn' 
+        ? 'ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ UPI ID (ಉದಾ: name@okaxis) ನಮೂದಿಸಿ.' 
+        : 'Please enter a valid UPI ID (e.g., yourname@okaxis).');
+      return;
+    }
+
+    if (!regPassword.trim() || regPassword.trim().length < 4) {
+      setErrorMessage(language === 'kn' 
+        ? 'ದಯವಿಟ್ಟು ಕನಿಷ್ಠ 4-ಅಂಕಿಯ ಭದ್ರತಾ MPIN / ಪಾಸ್‌ವರ್ಡ್ ಹೊಂದಿಸಿ.' 
+        : 'Please set at least a 4-digit security MPIN / password.');
+      return;
+    }
+
+    const formattedPhone = cleanPhoneDigits.length === 10
+      ? `+91 ${cleanPhoneDigits.slice(0, 5)} ${cleanPhoneDigits.slice(5)}`
+      : `+${cleanPhoneDigits}`;
 
     setIsSubmitting(true);
     const res = await registerUser({
-      fullName: regFullName,
-      email: regEmail,
-      phone: regPhone || '+91 98765 00000',
-      upiId: regUpiId,
+      fullName: regFullName.trim(),
+      email: regEmail.trim(),
+      phone: formattedPhone,
+      upiId: regUpiId.trim(),
       bankName: regBankName,
-      accountLast4: regAccountLast4 || '5678',
-      password: regPassword || '1234'
+      accountLast4: regAccountLast4.trim() || '5678',
+      password: regPassword.trim()
     });
     setIsSubmitting(false);
 
@@ -249,13 +275,13 @@ export default function LoginScreen() {
                 </div>
               ) : (
                 <form onSubmit={handleLoginSubmit} className="space-y-3.5">
-                  {/* Email or UPI ID */}
+                  {/* Mobile Number, Email or UPI ID */}
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       {t.auth.emailOrUpiLabel}
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                      <Smartphone className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                       <input
                         type="text"
                         value={loginIdentifier}
@@ -351,49 +377,56 @@ export default function LoginScreen() {
                 </div>
               </div>
 
-              {/* Email & Phone */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="name@email.com"
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                    {t.auth.phoneLabel}
-                  </label>
+              {/* Mobile Number (Mandatory) */}
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                  {t.auth.phoneLabel} *
+                </label>
+                <div className="relative">
+                  <Smartphone className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
                   <input
                     type="tel"
                     value={regPhone}
                     onChange={(e) => setRegPhone(e.target.value)}
                     placeholder={t.auth.phonePlaceholder}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition font-mono"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition font-mono"
+                    required
                   />
                 </div>
               </div>
 
-              {/* Desired UPI ID */}
-              <div>
-                <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                  {t.auth.upiIdLabel} *
-                </label>
-                <input
-                  type="text"
-                  value={regUpiId}
-                  onChange={(e) => setRegUpiId(e.target.value)}
-                  placeholder={t.auth.upiIdPlaceholder}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition font-mono text-emerald-400"
-                  required
-                />
+              {/* Email & Desired UPI ID */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Email *
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type="email"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="name@email.com"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    {t.auth.upiIdLabel} *
+                  </label>
+                  <input
+                    type="text"
+                    value={regUpiId}
+                    onChange={(e) => setRegUpiId(e.target.value)}
+                    placeholder={t.auth.upiIdPlaceholder}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition font-mono text-emerald-400"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Bank Name & Last 4 Digits */}

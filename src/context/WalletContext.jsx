@@ -134,42 +134,74 @@ export function WalletProvider({ children }) {
     storageService.loadUserTransactions(userId).then(setTransactions);
   }, []);
 
-  // Password / MPIN login verification
-  const loginWithPassword = useCallback((emailOrUpi, password) => {
-    const cleanId = emailOrUpi.trim().toLowerCase();
-    const cleanPass = password.trim();
+  // Password / MPIN login verification (supports Mobile Number, Email, or UPI ID)
+  const loginWithPassword = useCallback((identifier, password) => {
+    const raw = (identifier || '').trim();
+    const cleanId = raw.toLowerCase();
+    const cleanPass = (password || '').trim();
+    const phoneDigits = raw.replace(/\D/g, '');
 
-    const matched = profiles.find(
-      p => p.email.toLowerCase() === cleanId || p.upiId.toLowerCase() === cleanId
-    );
+    const matched = profiles.find(p => {
+      const pEmail = (p.email || '').toLowerCase();
+      const pUpi = (p.upiId || '').toLowerCase();
+      const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
+
+      if (pEmail === cleanId || pUpi === cleanId) return true;
+      if (phoneDigits.length >= 10 && pPhoneDigits.endsWith(phoneDigits.slice(-10))) return true;
+      return false;
+    });
 
     if (!matched) {
-      return { success: false, error: 'No profile found with this Email or UPI ID.' };
+      return { 
+        success: false, 
+        error: language === 'kn'
+          ? 'ಈ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ, ಇಮೇಲ್ ಅಥವಾ UPI ID ಯೊಂದಿಗೆ ಯಾವುದೇ ಖಾತೆ ಕಂಡುಬಂದಿಲ್ಲ.'
+          : 'No profile found with this Mobile Number, Email, or UPI ID.' 
+      };
     }
 
     // Check password against profile password or fallback demo '1234'
     const expectedPass = (matched.password || '1234').trim();
     if (cleanPass !== expectedPass && cleanPass !== '1234') {
-      return { success: false, error: 'Incorrect MPIN / Password. (Demo accounts use 1234)' };
+      return { 
+        success: false, 
+        error: language === 'kn'
+          ? 'ತಪ್ಪಾದ MPIN / ಪಾಸ್‌ವರ್ಡ್. (ಡೆಮೊ ಖಾತೆಗಳ MPIN: 1234)'
+          : 'Incorrect MPIN / Password. (Demo accounts use 1234)' 
+      };
     }
 
     loginAsUser(matched.id);
     showToast(`Welcome back, ${matched.fullName}!`, 'success');
     return { success: true, profile: matched };
-  }, [profiles, loginAsUser, showToast]);
+  }, [profiles, loginAsUser, showToast, language]);
 
   // Register New User
   const registerUser = useCallback(async (formData) => {
-    const cleanEmail = formData.email.trim().toLowerCase();
-    const cleanUpi = formData.upiId.trim().toLowerCase();
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
+    const cleanUpi = (formData.upiId || '').trim().toLowerCase();
+    const cleanPhone = (formData.phone || '').trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
 
-    // Check uniqueness
-    const exists = profiles.some(
-      p => p.email.toLowerCase() === cleanEmail || p.upiId.toLowerCase() === cleanUpi
-    );
+    // Check uniqueness across email, upiId, and phone
+    const exists = profiles.some(p => {
+      const pEmail = (p.email || '').toLowerCase();
+      const pUpi = (p.upiId || '').toLowerCase();
+      const pPhoneDigits = (p.phone || '').replace(/\D/g, '');
+
+      if (pEmail === cleanEmail) return true;
+      if (pUpi === cleanUpi) return true;
+      if (phoneDigits.length >= 10 && pPhoneDigits.endsWith(phoneDigits.slice(-10))) return true;
+      return false;
+    });
 
     if (exists) {
-      return { success: false, error: 'An account with this Email or UPI ID already exists.' };
+      return { 
+        success: false, 
+        error: language === 'kn'
+          ? 'ಈ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ, ಇಮೇಲ್ ಅಥವಾ UPI ID ಯೊಂದಿಗೆ ಈಗಾಗಲೇ ಖಾತೆ ಇದೆ.'
+          : 'An account with this Mobile Number, Email, or UPI ID already exists.' 
+      };
     }
 
     const newProfile = {
@@ -177,7 +209,7 @@ export function WalletProvider({ children }) {
       fullName: formData.fullName.trim(),
       email: cleanEmail,
       upiId: cleanUpi,
-      phone: formData.phone.trim() || '+91 98765 00000',
+      phone: cleanPhone,
       bankName: formData.bankName.trim() || 'HDFC Bank',
       accountLast4: formData.accountLast4.trim() || '1234',
       startingBalance: 25000,
@@ -192,7 +224,7 @@ export function WalletProvider({ children }) {
 
     showToast(`Welcome ${saved.fullName}! Wallet initialized with ₹25,000 demo funds.`, 'success');
     return { success: true, profile: saved };
-  }, [profiles, loginAsUser, showToast]);
+  }, [profiles, loginAsUser, showToast, language]);
 
   // Logout
   const logout = useCallback(async () => {
