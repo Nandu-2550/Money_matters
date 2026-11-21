@@ -3,23 +3,13 @@ import {
   ShieldCheck, 
   Download, 
   Languages, 
-  RotateCcw, 
   Clock, 
   BarChart3, 
-  X,
-  CreditCard,
-  User,
   ChevronDown,
-  Wifi,
-  WifiOff,
   RefreshCw,
-  Plus,
-  Eye,
-  EyeOff,
-  Lock
+  Plus
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
-import DemoPinModal from './DemoPinModal';
 
 export default function Navbar() {
   const { 
@@ -32,19 +22,14 @@ export default function Navbar() {
     computedMetrics, 
     promptInstall, 
     isInstalled, 
-    resetDemoData, 
     setIsProfileModalOpen,
     isOnline,
     offlineOutboxCount,
     syncOfflineOutbox,
-    setIsTopUpModalOpen,
-    isBalanceRevealed,
-    setIsBalanceRevealed
+    setIsTopUpModalOpen
   } = useWallet();
 
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showPinModal, setShowPinModal] = useState(false);
   const heldCount = computedMetrics.heldTransactions.length;
 
   const handleManualSync = async (e) => {
@@ -55,64 +40,9 @@ export default function Navbar() {
     setIsSyncing(false);
   };
 
-  const handleBalanceClick = () => {
-    if (isBalanceRevealed) {
-      setIsBalanceRevealed(false);
-    } else {
-      setShowPinModal(true);
-    }
-  };
-
-  const handlePinSuccess = () => {
-    setShowPinModal(false);
-    setIsBalanceRevealed(true);
-    setTimeout(() => {
-      setIsBalanceRevealed(false);
-    }, 15000);
-  };
-
   return (
     <>
-      {/* 1. Subtle, Clean Security Advisory Notice (Non-intrusive) */}
-      {!bannerDismissed && (
-        <aside 
-          aria-label="Security Notice"
-          className="bg-slate-900 border-b border-slate-800 text-slate-300 text-xs py-2 px-3 sm:px-6 sticky top-0 z-50 transition-all"
-        >
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 font-normal text-[11px] sm:text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-slate-400 font-semibold">
-                {language === 'kn' ? 'ಸುರಕ್ಷತಾ ಮಾಹಿತಿ:' : 'Notice:'}
-              </span>
-              <span className="text-slate-300">
-                {t.demoBanner}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => resetDemoData?.()}
-                title={t.resetDemo}
-                className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span className="hidden sm:inline">{t.resetDemo}</span>
-              </button>
-              <button 
-                type="button"
-                onClick={() => setBannerDismissed(true)}
-                className="p-1 text-slate-500 hover:text-slate-300 transition cursor-pointer"
-                title="Dismiss"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </aside>
-      )}
-
-      {/* 2. Main PhonePe-Style Header */}
+      {/* Main Header */}
       <header className="bg-slate-900/95 border-b border-slate-800/80 sticky top-0 z-40 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-3">
@@ -239,50 +169,18 @@ export default function Navbar() {
             {/* Right Utility Actions */}
             <div className="flex items-center gap-2">
               
-              {/* Standalone Safe-Wallet Balance Card (Masked by Default) + Quick Add Money */}
-              <div className="flex items-center gap-1">
-                <div 
-                  onClick={handleBalanceClick}
-                  className="cursor-pointer bg-slate-950 hover:bg-slate-800/80 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5 flex items-center gap-2 transition group"
-                  title={isBalanceRevealed ? "Click to mask balance" : "Click to check balance with PIN"}
-                >
-                  <div className="w-6 h-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition">
-                    {isBalanceRevealed ? <CreditCard className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
-                      <span>{t.currentBalanceLabel}</span>
-                      {isBalanceRevealed ? (
-                        <EyeOff className="w-2.5 h-2.5 text-slate-500 group-hover:text-slate-300" />
-                      ) : (
-                        <Eye className="w-2.5 h-2.5 text-slate-500 group-hover:text-slate-300" />
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm font-bold text-slate-100 font-mono">
-                      {isBalanceRevealed ? (
-                        `₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
-                      ) : (
-                        <span className="text-slate-400 tracking-wider text-xs font-semibold">
-                          ₹ • • • •
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Add Money Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsTopUpModalOpen(true)}
-                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                  title="Top-Up Safe Wallet from Bank"
-                >
-                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="hidden sm:inline">
-                    {language === 'kn' ? 'ಹಣ ಸೇರಿಸಿ' : 'Top-Up'}
-                  </span>
-                </button>
-              </div>
+              {/* Quick Add Money Button */}
+              <button
+                type="button"
+                onClick={() => setIsTopUpModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition cursor-pointer"
+                title={language === 'kn' ? 'ವಾಲೆಟ್‌ಗೆ ಹಣ ಸೇರಿಸಿ' : 'Top-Up Safe Wallet from Bank'}
+              >
+                <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">
+                  {language === 'kn' ? 'ಹಣ ಸೇರಿಸಿ' : 'Add Money'}
+                </span>
+              </button>
 
               {/* Install PWA Button */}
               {!isInstalled && (
@@ -351,16 +249,6 @@ export default function Navbar() {
           </button>
         </div>
       </div>
-
-      {/* Demo PIN Modal for Secure Balance Inquiry */}
-      {showPinModal && (
-        <DemoPinModal
-          isOpen={showPinModal}
-          onClose={() => setShowPinModal(false)}
-          onSuccess={handlePinSuccess}
-          mode="balance"
-        />
-      )}
     </>
   );
 }
