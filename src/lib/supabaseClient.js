@@ -28,6 +28,8 @@ export const DEFAULT_PROFILES = [
     startingBalance: 25000,
     avatarInitials: 'N',
     password: '1234',
+    demoPin: '1234',
+    demo_pin: '1234',
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString()
   },
   {
@@ -41,6 +43,8 @@ export const DEFAULT_PROFILES = [
     startingBalance: 18500,
     avatarInitials: 'A',
     password: '1234',
+    demoPin: '5678',
+    demo_pin: '5678',
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString()
   }
 ];
@@ -258,6 +262,8 @@ export const storageService = {
             startingBalance: Number(p.starting_balance),
             avatarInitials: p.avatar_initials,
             password: p.password || '1234',
+            demoPin: p.demo_pin || p.demoPin || (p.id === 'usr_anjaneya' ? '5678' : (p.id === 'usr_nandeesh' ? '1234' : '0000')),
+            demo_pin: p.demo_pin || p.demoPin || (p.id === 'usr_anjaneya' ? '5678' : (p.id === 'usr_nandeesh' ? '1234' : '0000')),
             createdAt: p.created_at
           }));
         }
@@ -314,7 +320,7 @@ export const storageService = {
     // Sync to Supabase in background if available
     if (this.isCloudConnected() && supabase) {
       try {
-        await supabase.from('profiles').upsert({
+        const profilePayload = {
           id: newProfile.id,
           full_name: newProfile.fullName,
           email: newProfile.email,
@@ -324,9 +330,17 @@ export const storageService = {
           account_last4: newProfile.accountLast4,
           starting_balance: newProfile.startingBalance,
           avatar_initials: newProfile.avatarInitials,
-          password: newProfile.password,
+          password: newProfile.password || '1234',
+          demo_pin: newProfile.demoPin || newProfile.demo_pin || '0000',
           created_at: newProfile.createdAt
-        });
+        };
+
+        const { error: pErr } = await supabase.from('profiles').upsert(profilePayload);
+        if (pErr && pErr.message && pErr.message.includes('demo_pin')) {
+          const fallbackPayload = { ...profilePayload };
+          delete fallbackPayload.demo_pin;
+          await supabase.from('profiles').upsert(fallbackPayload);
+        }
 
         await supabase.from('transactions').upsert({
           id: welcomeTx.id,

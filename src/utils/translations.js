@@ -81,10 +81,12 @@ export const translations = {
       activeAccount: "Active Account"
     },
     quickActions: {
+      scanQr: "Scan Any QR",
       toMobile: "To Mobile / UPI",
       receiveQr: "Receive / QR",
       checkBalance: "Check Balance",
       linkScanner: "Scam Scanner",
+      contactsTitle: "Money Matters Contacts",
       quickP2PTitle: "Quick Family Transfer",
       sendToContact: "Send to {name} ({upi})",
       qrModalTitle: "My UPI QR Code",
@@ -120,6 +122,7 @@ export const translations = {
       collectCheckbox: "This is a 'Collect Request' or 'Approve' prompt",
       collectHelp: "Important: You NEVER need to enter your UPI PIN to receive money.",
       scanBtn: "Scan & Verify Payment",
+      proceedToPay: "Proceed to Pay",
       scanning: "Analyzing...",
       riskCardTitle: "Security Analysis",
       riskScore: "Risk Assessment",
@@ -128,7 +131,13 @@ export const translations = {
       gotoQueue: "Open Review Queue",
       processedMsg: "Transaction safe. Reconciled with your wallet balance.",
       heldMsg: "Payment held for safety. Funds remain in your account until approved.",
-      validationError: "Please enter a valid UPI ID and an amount greater than ₹0."
+      validationError: "Please enter a valid UPI ID and an amount greater than ₹0.",
+      closedLoopError: "Recipient is not registered on Money Matters. Closed-loop transfers require a registered user or verified SEBI handle.",
+      paymentSuccessful: "Payment Successful",
+      paidSuccessfullyTo: "Paid successfully to",
+      debitedFrom: "Debited from",
+      upiTxId: "UPI Transaction ID",
+      doneBtn: "Done"
     },
     queue: {
       title: "Family Review Queue",
@@ -185,7 +194,9 @@ export const translations = {
       colCategory: "Category",
       colRisk: "Risk",
       colStatus: "Status",
-      colAmount: "Amount"
+      colAmount: "Amount",
+      debited: "Debited",
+      credited: "Credited"
     },
     categories: {
       Salary: "Income & Salary",
@@ -291,10 +302,12 @@ export const translations = {
       activeAccount: "ಸಕ್ರಿಯ ಖಾತೆ"
     },
     quickActions: {
+      scanQr: "ಯಾವುದೇ QR ಸ್ಕ್ಯಾನ್",
       toMobile: "ಮೊಬೈಲ್ / UPI ಗೆ",
       receiveQr: "ಸ್ವೀಕರಿಸಿ / QR",
       checkBalance: "ಬ್ಯಾಲೆನ್ಸ್ ಚೆಕ್",
       linkScanner: "ಸ್ಕ್ಯಾಮ್ ಸ್ಕ್ಯಾನರ್",
+      contactsTitle: "ಮನಿ ಮ್ಯಾಟರ್ಸ್ ಸಂಪರ್ಕಗಳು",
       quickP2PTitle: "ತ್ವರಿತ ಕುಟುಂಬ ವರ್ಗಾವಣೆ",
       sendToContact: "{name} ಗೆ ಹಣ ಕಳುಹಿಸಿ ({upi})",
       qrModalTitle: "ನನ್ನ UPI QR ಕೋಡ್",
@@ -330,6 +343,7 @@ export const translations = {
       collectCheckbox: "ಇದು 'ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್' ಅಥವಾ 'ಅಪ್ರೂವ್' ಪ್ರಾಂಪ್ಟ್ ಆಗಿದೆ",
       collectHelp: "ನೆನಪಿಡಿ: ಹಣ ಸ್ವೀಕರಿಸಲು ಎಂದಿಗೂ UPI PIN ನಮೂದಿಸುವ ಅಗತ್ಯವಿಲ್ಲ.",
       scanBtn: "ಪಾವತಿ ಪರಿಶೀಲಿಸಿ",
+      proceedToPay: "ಪಾವತಿಸಲು ಮುಂದುವರಿಯಿರಿ",
       scanning: "ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ...",
       riskCardTitle: "ಭದ್ರತಾ ವಿಶ್ಲೇಷಣೆ",
       riskScore: "ಅಪಾಯದ ಅಂಕ",
@@ -338,7 +352,13 @@ export const translations = {
       gotoQueue: "ಪರಿಶೀಲನಾ ಸರದಿಗೆ ಹೋಗಿ",
       processedMsg: "ವಹಿವಾಟು ಸುರಕ್ಷಿತವಾಗಿದೆ. ನಿಮ್ಮ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್‌ಗೆ ನಮೂದಿಸಲಾಗಿದೆ.",
       heldMsg: "ವಹಿವಾಟನ್ನು ತಡೆಹಿಡಿಯಲಾಗಿದೆ. ಅನುಮೋದಿಸುವವರೆಗೆ ಹಣ ನಿಮ್ಮ ಖಾತೆಯಲ್ಲೇ ಇರುತ್ತದೆ.",
-      validationError: "ದಯವಿಟ್ಟು ಸರಿಯಾದ UPI ID ಮತ್ತು ಮೊತ್ತವನ್ನು ನಮೂದಿಸಿ."
+      validationError: "ದಯವಿಟ್ಟು ಸರಿಯಾದ UPI ID ಮತ್ತು ಮೊತ್ತವನ್ನು ನಮೂದಿಸಿ.",
+      closedLoopError: "ಸ್ವೀಕರಿಸುವವರು ಮನಿ ಮ್ಯಾಟರ್ಸ್‌ನಲ್ಲಿ ನೋಂದಾಯಿಸಿಲ್ಲ. ಮುಚ್ಚಿದ-ಲೂಪ್ ವರ್ಗಾವಣೆಗಳಿಗೆ ನೋಂದಾಯಿತ ಖಾತೆ ಅಗತ್ಯವಿದೆ.",
+      paymentSuccessful: "ಪಾವತಿ ಯಶಸ್ವಿಯಾಗಿದೆ",
+      paidSuccessfullyTo: "ಇವರಿಗೆ ಯಶಸ್ವಿಯಾಗಿ ಪಾವತಿಸಲಾಗಿದೆ",
+      debitedFrom: "ಕಡಿತಗೊಂಡ ಬ್ಯಾಂಕ್ ಖಾತೆ",
+      upiTxId: "UPI ವಹಿವಾಟು ಸಂಖ್ಯೆ",
+      doneBtn: "ಮುಗಿಯಿತು"
     },
     queue: {
       title: "ಕುಟುಂಬದ ಪರಿಶೀಲನಾ ಸರದಿ",
@@ -395,7 +415,9 @@ export const translations = {
       colCategory: "ವರ್ಗ",
       colRisk: "ಅಪಾಯ",
       colStatus: "ಸ್ಥಿತಿ",
-      colAmount: "ಮೊತ್ತ"
+      colAmount: "ಮೊತ್ತ",
+      debited: "ಡೆಬಿಟ್ ಆಗಿದೆ",
+      credited: "ಜಮೆಯಾಗಿದೆ"
     },
     categories: {
       Salary: "ಆದಾಯ & ವೇತನ",

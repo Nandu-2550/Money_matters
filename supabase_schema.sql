@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS profiles (
   starting_balance NUMERIC DEFAULT 25000,
   avatar_initials TEXT NOT NULL,
   password TEXT DEFAULT '1234',
+  demo_pin TEXT DEFAULT '0000',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Ensure password column exists if table was already created
+-- Ensure password and demo_pin columns exist if table was already created
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '1234';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS demo_pin TEXT DEFAULT '0000';
 
 -- 2. Create or upgrade transactions table with user_id
 CREATE TABLE IF NOT EXISTS transactions (
@@ -74,11 +76,11 @@ CREATE POLICY "Allow public insert access" ON transactions FOR INSERT WITH CHECK
 CREATE POLICY "Allow public update access" ON transactions FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete access" ON transactions FOR DELETE USING (true);
 
--- 6. Pre-seed Default Users (Nandeesh & Anjaneya with default MPIN 1234)
-INSERT INTO profiles (id, full_name, email, upi_id, phone, bank_name, account_last4, starting_balance, avatar_initials, password)
+-- 6. Pre-seed Default Users (Nandeesh with PIN 1234 & Anjaneya with PIN 5678)
+INSERT INTO profiles (id, full_name, email, upi_id, phone, bank_name, account_last4, starting_balance, avatar_initials, password, demo_pin)
 VALUES
-  ('usr_nandeesh', 'Nandeesh', 'nandunusgavai@gmail.com', 'nandeesh@okicici', '+91 98765 43210', 'ICICI Bank', '4821', 25000, 'N', '1234'),
-  ('usr_anjaneya', 'Anjaneya', 'anjaneya.9480@gmail.com', 'anjaneya@oksbi', '+91 94801 23456', 'State Bank of India', '9480', 18500, 'A', '1234')
+  ('usr_nandeesh', 'Nandeesh', 'nandunusgavai@gmail.com', 'nandeesh@okicici', '+91 98765 43210', 'ICICI Bank', '4821', 25000, 'N', '1234', '1234'),
+  ('usr_anjaneya', 'Anjaneya', 'anjaneya.9480@gmail.com', 'anjaneya@oksbi', '+91 94801 23456', 'State Bank of India', '9480', 18500, 'A', '1234', '5678')
 ON CONFLICT (id) DO UPDATE SET
   full_name = EXCLUDED.full_name,
   email = EXCLUDED.email,
@@ -86,7 +88,8 @@ ON CONFLICT (id) DO UPDATE SET
   bank_name = EXCLUDED.bank_name,
   account_last4 = EXCLUDED.account_last4,
   starting_balance = EXCLUDED.starting_balance,
-  password = EXCLUDED.password;
+  password = EXCLUDED.password,
+  demo_pin = EXCLUDED.demo_pin;
 
 -- 7. Pre-seed Realistic Sample Transactions (with Risk Scores, Review Queue items & P2P)
 INSERT INTO transactions (id, user_id, direction, amount, counterparty, category, message, risk_score, risk_level, status, reasons, is_collect_request, created_at)

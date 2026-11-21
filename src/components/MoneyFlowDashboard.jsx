@@ -466,15 +466,29 @@ export default function MoneyFlowDashboard() {
                     </span>
                   </td>
                   <td className="py-2.5 px-3 whitespace-nowrap text-right font-medium">
-                    <span className={
-                      tx.status === 'BLOCKED'
-                        ? 'text-slate-400 line-through'
-                        : tx.direction === 'IN'
-                        ? 'text-emerald-400'
-                        : 'text-slate-200'
-                    }>
-                      {tx.direction === 'IN' ? '+' : '-'}₹{Number(tx.amount).toLocaleString('en-IN')}
-                    </span>
+                    {tx.status === 'BLOCKED' ? (
+                      <span className="text-slate-400 line-through text-xs">
+                        ₹{Number(tx.amount).toLocaleString('en-IN')}
+                      </span>
+                    ) : tx.direction === 'IN' ? (
+                      <div className="inline-flex flex-col items-end">
+                        <span className="font-bold text-emerald-400">
+                          + ₹{Number(tx.amount).toLocaleString('en-IN')}
+                        </span>
+                        <span className="text-[10px] text-emerald-400/80 font-medium">
+                          ({t.dashboard.credited || 'Credited'})
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex flex-col items-end">
+                        <span className="font-bold text-rose-400">
+                          - ₹{Number(tx.amount).toLocaleString('en-IN')}
+                        </span>
+                        <span className="text-[10px] text-rose-400/80 font-medium">
+                          ({t.dashboard.debited || 'Debited'})
+                        </span>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

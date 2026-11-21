@@ -14,42 +14,59 @@ import {
   QrCode,
   CreditCard,
   Send,
-  Link as LinkIcon,
+  Users,
   X,
-  Copy,
-  Check
+  Check,
+  Lock,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
+import QRScannerModal from './QRScannerModal';
+import ReceiveQRModal from './ReceiveQRModal';
+import DemoPinModal from './DemoPinModal';
 
 export default function ScannerSimulator() {
   const { 
     currentUser, 
     profiles, 
+    computedMetrics,
     language, 
     t, 
     submitTransaction, 
-    setActiveTab, 
-    setIsProfileModalOpen 
+    setActiveTab 
   } = useWallet();
 
+  // Form State
   const [direction, setDirection] = useState('OUT'); // 'IN' | 'OUT'
   const [counterparty, setCounterparty] = useState('');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Investment');
+  const [category, setCategory] = useState('Transfer');
   const [message, setMessage] = useState('');
   const [isCollectRequest, setIsCollectRequest] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Modals for PhonePe-style quick actions
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [copiedUpi, setCopiedUpi] = useState(false);
+  // Modals
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showReceiveQR, setShowReceiveQR] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinModalMode, setPinModalMode] = useState('transfer'); // 'transfer' | 'balance'
+  const [pendingTransfer, setPendingTransfer] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successData, setSuccessData] = useState(null);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
 
-  // Identify counterpart contact (Anjaneya if Nandeesh, Nandeesh if Anjaneya)
-  const peerContact = profiles.find(p => p.id !== currentUser.id) || profiles[1];
+  // Other registered users for contacts bar
+  const otherUsers = profiles.filter(p => p.id !== currentUser?.id);
 
-  // Quick Action Buttons Handlers
+  // Quick Action 1: Scan Any QR
+  const handleActionScanQR = () => {
+    setShowQRScanner(true);
+  };
+
+  // Quick Action 2: To Mobile / UPI
   const handleActionToMobile = () => {
     setDirection('OUT');
     setIsCollectRequest(false);
@@ -57,31 +74,37 @@ export default function ScannerSimulator() {
     setFormError('');
   };
 
-  const handleActionReceive = () => {
-    setShowQrModal(true);
-  };
-
+  // Quick Action 3: Check Balance (Triggers Demo PIN first)
   const handleActionCheckBalance = () => {
-    setIsProfileModalOpen(true);
+    setPinModalMode('balance');
+    setShowPinModal(true);
   };
 
-  const handleActionScamScanner = () => {
+  // Quick Action 4: Receive Money / My QR
+  const handleActionReceive = () => {
+    setShowReceiveQR(true);
+  };
+
+  // Select contact from horizontal bar
+  const handleSelectContact = (contact) => {
     setDirection('OUT');
-    setCategory('Investment');
-    setCounterparty('vip.trading@okaxis');
-    setAmount('10000');
-    setMessage('Guaranteed 50% weekly return VIP stocks group download http://vipstocks.xyz/bonus.apk');
+    setCounterparty(contact.upiId);
+    setCategory('Transfer');
+    setMessage(`Transfer to ${contact.fullName}`);
+    setIsCollectRequest(false);
     setScanResult(null);
     setFormError('');
   };
 
-  // 1-Click Peer-to-Peer Transfer Handler
-  const handleQuickP2P = (peer) => {
+  // QR Scan successful callback
+  const handleQRScanSuccess = ({ upiId, payeeName, amount: qrAmount }) => {
     setDirection('OUT');
-    setCounterparty(peer.upiId);
-    setAmount('1000');
+    setCounterparty(upiId);
+    if (qrAmount) {
+      setAmount(qrAmount);
+    }
     setCategory('Transfer');
-    setMessage(`Transfer to ${peer.fullName}`);
+    setMessage(payeeName ? `Payment to ${payeeName}` : `Payment to ${upiId}`);
     setIsCollectRequest(false);
     setScanResult(null);
     setFormError('');
@@ -134,7 +157,8 @@ export default function ScannerSimulator() {
     }
   };
 
-  const handleRunScan = async (e) => {
+  // Initiate Payment Submission (Validates and triggers Sandbox PIN Modal)
+  const handleInitiatePayment = (e) => {
     e?.preventDefault();
     setFormError('');
 
@@ -144,43 +168,116 @@ export default function ScannerSimulator() {
       return;
     }
 
+    // Closed-loop verification for OUT transfers
+    if (direction === 'OUT') {
+      const cleanUpi = counterparty.trim().toLowerCase();
+      const sebiRegex = /^[a-zA-Z0-9._-]+\.(brk|mf|dp|pms|ra|ia)@valid[a-zA-Z]+$/i;
+      const isRegistered = profiles.some(p => p.upiId.toLowerCase() === cleanUpi);
+      const isValidSebi = sebiRegex.test(cleanUpi);
+      const isPreset = cleanUpi.includes('store') || cleanUpi.includes('vip') || cleanUpi.includes('buyer') || cleanUpi.includes('zerodha') || cleanUpi.includes('bescom');
+
+      if (!isRegistered && !isValidSebi && !isPreset) {
+        setFormError(
+          t.scanner.closedLoopError ||
+          'Recipient is not registered on Money Matters. Closed-loop transfers require a registered user or verified SEBI handle.'
+        );
+        return;
+      }
+
+      // Check balance
+      if (parsedAmount > computedMetrics.currentBalance) {
+        setFormError(
+          language === 'kn'
+            ? `ಅಪರ್ಯಾಪ್ತ ಬ್ಯಾಲೆನ್ಸ್! ನಿಮ್ಮ ಲಭ್ಯವಿರುವ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್ ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
+            : `Insufficient balance! Your available wallet balance is ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
+        );
+        return;
+      }
+    }
+
+    const recipient = profiles.find(p => p.upiId.toLowerCase() === counterparty.trim().toLowerCase());
+    const payeeName = recipient ? recipient.fullName : counterparty.trim();
+
+    setPendingTransfer({
+      direction,
+      counterparty: counterparty.trim(),
+      amount: parsedAmount,
+      category,
+      message,
+      isCollectRequest: direction === 'IN' ? isCollectRequest : false,
+      payeeName
+    });
+
+    setPinModalMode('transfer');
+    setShowPinModal(true);
+  };
+
+  // Handle PIN validation success
+  const handlePinSuccess = async () => {
+    setShowPinModal(false);
+
+    if (pinModalMode === 'balance') {
+      setShowBalanceModal(true);
+      return;
+    }
+
+    if (!pendingTransfer) return;
+
     setIsScanning(true);
     setScanResult(null);
 
-    setTimeout(async () => {
-      const result = await submitTransaction({
-        direction,
-        counterparty,
-        amount: parsedAmount,
-        category,
-        message,
-        isCollectRequest: direction === 'IN' ? isCollectRequest : false
-      });
-      setScanResult(result);
-      setIsScanning(false);
-    }, 350);
-  };
+    const result = await submitTransaction(pendingTransfer);
+    setIsScanning(false);
 
-  const copyUpiText = () => {
-    navigator.clipboard.writeText(currentUser.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
+    if (result.status === 'VERIFIED') {
+      setSuccessData({
+        amount: pendingTransfer.amount,
+        payeeName: pendingTransfer.payeeName,
+        counterparty: pendingTransfer.counterparty,
+        txId: `UPI-MM-${Date.now().toString().slice(-8)}`,
+        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }),
+        bank: `${currentUser.bankName} •••• ${currentUser.accountLast4}`
+      });
+      setShowSuccessModal(true);
+      setCounterparty('');
+      setAmount('');
+      setMessage('');
+    } else {
+      // Flagged / Held for review
+      setScanResult(result);
+    }
+
+    setPendingTransfer(null);
   };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       
       {/* 1. PhonePe-Style 4-Icon Action Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
         <div className="grid grid-cols-4 gap-2 sm:gap-4 text-center">
           
-          {/* Action 1: To Mobile / UPI */}
+          {/* 1. Scan Any QR */}
+          <button
+            type="button"
+            onClick={handleActionScanQR}
+            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <QrCode className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
+              {t.quickActions.scanQr || 'Scan Any QR'}
+            </span>
+          </button>
+
+          {/* 2. To Mobile / UPI */}
           <button
             type="button"
             onClick={handleActionToMobile}
             className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
               <Smartphone className="w-5 h-5" />
             </div>
             <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
@@ -188,21 +285,7 @@ export default function ScannerSimulator() {
             </span>
           </button>
 
-          {/* Action 2: Receive Money / QR */}
-          <button
-            type="button"
-            onClick={handleActionReceive}
-            className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
-              <QrCode className="w-5 h-5" />
-            </div>
-            <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
-              {t.quickActions.receiveQr}
-            </span>
-          </button>
-
-          {/* Action 3: Check Bank Balance */}
+          {/* 3. Check Bank Balance */}
           <button
             type="button"
             onClick={handleActionCheckBalance}
@@ -216,49 +299,67 @@ export default function ScannerSimulator() {
             </span>
           </button>
 
-          {/* Action 4: Scam & Link Scanner */}
+          {/* 4. Receive Money / QR */}
           <button
             type="button"
-            onClick={handleActionScamScanner}
+            onClick={handleActionReceive}
             className="flex flex-col items-center gap-1.5 p-2 rounded-2xl hover:bg-slate-800/60 transition group cursor-pointer"
           >
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
-              <ShieldAlert className="w-5 h-5" />
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+              <Landmark className="w-5 h-5" />
             </div>
             <span className="text-[11px] sm:text-xs font-semibold text-slate-300 group-hover:text-white leading-tight">
-              {t.quickActions.linkScanner}
+              {t.quickActions.receiveQr}
             </span>
           </button>
 
         </div>
 
-        {/* 1-Click P2P Transfer Banner (e.g. Nandeesh -> Anjaneya or Anjaneya -> Nandeesh) */}
-        {peerContact && (
-          <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-slate-800 text-xs font-bold text-white flex items-center justify-center shrink-0">
-                {peerContact.avatarInitials}
-              </div>
-              <div className="text-xs">
-                <span className="text-slate-400 block">{t.quickActions.quickP2PTitle}:</span>
-                <span className="font-semibold text-slate-200">{peerContact.fullName} ({peerContact.upiId})</span>
-              </div>
+        {/* Horizontal "Money Matters Contacts" Bar */}
+        {otherUsers.length > 0 && (
+          <div className="pt-3 border-t border-slate-800/80">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{t.quickActions.contactsTitle || 'Money Matters Contacts'}</span>
+              </span>
+              <span className="text-[10px] text-emerald-400 font-medium">
+                {language === 'kn' ? 'ಮುಚ್ಚಿದ-ಲೂಪ್ P2P' : 'Closed-Loop P2P'}
+              </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleQuickP2P(peerContact)}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>{t.quickActions.sendToContact.replace('{name}', peerContact.fullName).replace('{upi}', peerContact.upiId)}</span>
-            </button>
+            <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-thin">
+              {otherUsers.map((contact) => (
+                <button
+                  key={contact.id}
+                  type="button"
+                  onClick={() => handleSelectContact(contact)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-2xl border transition shrink-0 cursor-pointer ${
+                    counterparty.toLowerCase() === contact.upiId.toLowerCase()
+                      ? 'bg-indigo-500/10 border-indigo-500/50 text-white'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center justify-center shrink-0">
+                    {contact.avatarInitials}
+                  </div>
+                  <div className="text-left">
+                    <span className="text-xs font-bold block leading-tight text-white">
+                      {contact.fullName}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono block leading-tight">
+                      {contact.upiId}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
       {/* 2. Top Header Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
@@ -270,7 +371,7 @@ export default function ScannerSimulator() {
           </div>
 
           {/* Direction Pill Selector */}
-          <div className="inline-flex bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 self-start sm:self-auto">
+          <div className="inline-flex bg-slate-950 p-1 rounded-2xl border border-slate-800 shrink-0 self-start sm:self-auto">
             <button
               type="button"
               onClick={() => {
@@ -278,7 +379,7 @@ export default function ScannerSimulator() {
                 setIsCollectRequest(false);
                 setScanResult(null);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition ${
                 direction === 'OUT'
                   ? 'bg-slate-800 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -294,7 +395,7 @@ export default function ScannerSimulator() {
                 setDirection('IN');
                 setScanResult(null);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition ${
                 direction === 'IN'
                   ? 'bg-slate-800 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -316,7 +417,7 @@ export default function ScannerSimulator() {
             <button
               type="button"
               onClick={() => handleApplyPreset(1)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
+              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Store className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -332,7 +433,7 @@ export default function ScannerSimulator() {
             <button
               type="button"
               onClick={() => handleApplyPreset(2)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
+              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
@@ -348,7 +449,7 @@ export default function ScannerSimulator() {
             <button
               type="button"
               onClick={() => handleApplyPreset(3)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
+              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <TrendingUp className="w-4 h-4 text-rose-400 shrink-0" />
@@ -364,7 +465,7 @@ export default function ScannerSimulator() {
             <button
               type="button"
               onClick={() => handleApplyPreset(4)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
+              className="text-left p-3 rounded-2xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1">
                 <Landmark className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -384,8 +485,8 @@ export default function ScannerSimulator() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Form Container */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
-          <form onSubmit={handleRunScan} className="space-y-4">
+        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+          <form onSubmit={handleInitiatePayment} className="space-y-4">
             
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -397,30 +498,40 @@ export default function ScannerSimulator() {
             </div>
 
             {formError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2 animate-fadeIn">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{formError}</span>
+                <span className="leading-relaxed">{formError}</span>
               </div>
             )}
 
             {/* UPI ID */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                {t.scanner.upiLabel}
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-slate-300">
+                  {t.scanner.upiLabel}
+                </label>
+                <button
+                  type="button"
+                  onClick={handleActionScanQR}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition cursor-pointer"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>{language === 'kn' ? 'QR ಸ್ಕ್ಯಾನ್' : 'Scan QR'}</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={counterparty}
                 onChange={(e) => setCounterparty(e.target.value)}
                 placeholder={t.scanner.upiPlaceholder}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition font-mono"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-2xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition font-mono"
                 required
               />
               {direction === 'OUT' && (
                 <p className="text-[11px] text-slate-400 mt-1">
                   {language === 'kn'
-                    ? 'ಅಧಿಕೃತ SEBI ಹೂಡಿಕೆ ಬ್ರೋಕರ್‌ಗಳು .brk@valid* ಅಥವಾ .mf@valid* ಹ್ಯಾಂಡಲ್ ಬಳಸುತ್ತಾರೆ.'
-                    : 'Tip: Regulated SEBI brokers use official .brk@valid* or .mf@valid* handles.'}
+                    ? 'ಮನಿ ಮ್ಯಾಟರ್ಸ್‌ನ ನೋಂದಾಯಿತ ಬಳಕೆದಾರರು ಅಥವಾ ಅಧಿಕೃತ .brk@valid* ಬ್ರೋಕರ್‌ಗಳಿಗೆ ಮಾತ್ರ ಕಳುಹಿಸಬಹುದು.'
+                    : 'Closed-loop: Send to registered Money Matters users or official SEBI .brk@valid* handles.'}
                 </p>
               )}
             </div>
@@ -440,7 +551,7 @@ export default function ScannerSimulator() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder={t.scanner.amountPlaceholder}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition font-semibold"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-2xl pl-8 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition font-semibold"
                     required
                   />
                 </div>
@@ -453,10 +564,10 @@ export default function ScannerSimulator() {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-2xl px-3.5 py-2.5 text-sm text-white outline-none transition"
                 >
-                  <option value="Investment">{t.categories.Investment}</option>
                   <option value="Transfer">{t.categories.Transfer}</option>
+                  <option value="Investment">{t.categories.Investment}</option>
                   <option value="Retail">{t.categories.Retail}</option>
                   <option value="Business">{t.categories.Business}</option>
                   <option value="Utilities">{t.categories.Utilities}</option>
@@ -477,13 +588,13 @@ export default function ScannerSimulator() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={t.scanner.messagePlaceholder}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 outline-none transition resize-none"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-2xl px-3.5 py-2 text-sm text-white placeholder-slate-500 outline-none transition resize-none"
               />
             </div>
 
             {/* Incoming Mode: Collect Request Checkbox */}
             {direction === 'IN' && (
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
                 <label className="flex items-start gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -503,11 +614,11 @@ export default function ScannerSimulator() {
               </div>
             )}
 
-            {/* Submit Button */}
+            {/* Submit Button (Proceed to Pay) */}
             <button
               type="submit"
               disabled={isScanning}
-              className="w-full py-2.5 px-4 rounded-xl font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-3 px-4 rounded-2xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-lg shadow-emerald-500/20"
             >
               {isScanning ? (
                 <>
@@ -516,8 +627,8 @@ export default function ScannerSimulator() {
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>{t.scanner.scanBtn}</span>
+                  <Lock className="w-4 h-4 stroke-[2.5]" />
+                  <span>{direction === 'OUT' ? (t.scanner.proceedToPay || 'Proceed to Pay') : t.scanner.scanBtn}</span>
                 </>
               )}
             </button>
@@ -527,7 +638,7 @@ export default function ScannerSimulator() {
         {/* Security Result Card */}
         <div className="lg:col-span-5 flex flex-col">
           {scanResult ? (
-            <div className={`h-full rounded-2xl p-5 sm:p-6 border shadow-sm flex flex-col justify-between ${
+            <div className={`h-full rounded-3xl p-5 sm:p-6 border shadow-sm flex flex-col justify-between ${
               scanResult.status === 'HELD_FOR_REVIEW'
                 ? 'bg-slate-900 border-amber-500/30'
                 : 'bg-slate-900 border-emerald-500/30'
@@ -549,156 +660,233 @@ export default function ScannerSimulator() {
                       ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
                       : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                   }`}>
-                    {t.statuses[scanResult.status] || scanResult.status}
+                    {t.statuses[scanResult.status]}
                   </span>
                 </div>
 
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 mb-4 flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shrink-0">
-                    <span className="text-base font-bold text-white leading-none">{scanResult.riskScore}</span>
-                    <span className="text-[9px] text-slate-500 font-medium">/ 100</span>
-                  </div>
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 mb-4 flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-semibold text-slate-300">
-                      {t.riskLevels[scanResult.riskLevel] || scanResult.riskLevel}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {scanResult.status === 'HELD_FOR_REVIEW' ? t.scanner.heldMsg : t.scanner.processedMsg}
-                    </p>
+                    <span className="text-[11px] text-slate-400 block">{t.scanner.riskScore}</span>
+                    <span className={`text-2xl font-bold font-mono ${
+                      scanResult.riskScore >= 60
+                        ? 'text-rose-400'
+                        : scanResult.riskScore >= 30
+                        ? 'text-amber-400'
+                        : 'text-emerald-400'
+                    }`}>
+                      {scanResult.riskScore} / 100
+                    </span>
                   </div>
+                  <span className={`px-3 py-1 rounded-xl text-xs font-bold ${
+                    scanResult.riskLevel === 'HIGH_RISK'
+                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      : scanResult.riskLevel === 'SUSPICIOUS'
+                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {t.riskLevels[scanResult.riskLevel]}
+                  </span>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <span className="text-xs font-semibold text-slate-300 block">
                     {t.scanner.reasonsTitle}
-                  </div>
-                  <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {(language === 'kn' && scanResult.reasonsKn?.length ? scanResult.reasonsKn : scanResult.reasons).map((reason, idx) => (
-                      <li 
-                        key={idx}
-                        className="text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 text-slate-300 flex items-start gap-2"
-                      >
-                        <span className="text-slate-500 font-bold">•</span>
-                        <span className="leading-relaxed">{reason}</span>
+                  </span>
+                  <ul className="space-y-1.5">
+                    {(language === 'kn' && scanResult.reasonsKn ? scanResult.reasonsKn : scanResult.reasons).map((r, i) => (
+                      <li key={i} className="text-xs text-slate-400 flex items-start gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
+                        <span className="text-amber-400 font-bold shrink-0 mt-0.5">•</span>
+                        <span>{r}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-slate-800">
+              <div className="pt-4 mt-4 border-t border-slate-800">
                 {scanResult.status === 'HELD_FOR_REVIEW' ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('queue')}
-                    className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <span>{t.scanner.gotoQueue}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="space-y-2.5">
+                    <p className="text-xs text-amber-300 leading-relaxed">
+                      {t.scanner.heldMsg}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('queue')}
+                      className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/10"
+                    >
+                      <span>{t.scanner.gotoQueue}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('dashboard')}
-                    className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <span>{language === 'kn' ? 'ಲೆಡ್ಜರ್ ವೀಕ್ಷಿಸಿ' : 'View Ledger'}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{t.scanner.processedMsg}</span>
+                  </p>
                 )}
-                <p className="text-[10px] text-slate-500 text-center mt-2">
-                  {t.disclaimerNotice}
-                </p>
               </div>
             </div>
           ) : (
-            <div className="h-full min-h-[260px] bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
-              <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
-                <ShieldCheck className="w-6 h-6 text-slate-400" />
+            <div className="h-full rounded-3xl p-6 bg-slate-900 border border-slate-800 shadow-sm flex flex-col items-center justify-center text-center space-y-3 min-h-[300px]">
+              <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500">
+                <ShieldCheck className="w-6 h-6" />
               </div>
-              <h4 className="text-sm font-semibold text-slate-200 mb-1">
-                {language === 'kn' ? 'ಪಾವತಿ ಪರಿಶೀಲನೆ ಸಿದ್ಧವಾಗಿದೆ' : 'Ready to verify'}
-              </h4>
-              <p className="text-xs text-slate-400 max-w-xs">
-                {language === 'kn'
-                  ? 'ಮೇಲಿನ ತ್ವರಿತ ಆಯ್ಕೆಗಳನ್ನು ಬಳಸಿ ಅಥವಾ ಹೊಸ ಪಾವತಿ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಪರಿಶೀಲಿಸಿ.'
-                  : 'Select an action above or enter UPI payment details to verify safety.'}
-              </p>
+              <div className="max-w-xs space-y-1">
+                <h4 className="text-sm font-bold text-slate-300">
+                  {language === 'kn' ? 'ದ್ವಿಮುಖ ಭದ್ರತಾ ವಿಶ್ಲೇಷಣೆ' : 'Two-Way Payment Screen'}
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {language === 'kn' 
+                    ? 'ಹಣ ಕಳುಹಿಸಲು ಅಥವಾ ಸ್ವೀಕರಿಸಲು ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಮತ್ತು ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ PIN ನೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.'
+                    : 'Enter payment details above to run SEBI/NPCI checks and authorize with your sandbox PIN.'}
+                </p>
+              </div>
             </div>
           )}
         </div>
 
       </div>
 
-      {/* Receive Money / QR Code Modal */}
-      {showQrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowQrModal(false)}
-              className="absolute right-4 top-4 p-1 rounded-full bg-slate-800 text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {/* MODAL 1: QR Scanner Modal */}
+      <QRScannerModal
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScanSuccess={handleQRScanSuccess}
+      />
 
-            <div>
-              <h3 className="text-base font-bold text-white tracking-tight">
-                {t.quickActions.qrModalTitle}
+      {/* MODAL 2: Receive QR Modal */}
+      <ReceiveQRModal
+        isOpen={showReceiveQR}
+        onClose={() => setShowReceiveQR(false)}
+      />
+
+      {/* MODAL 3: Simulated 4-Digit PIN Modal */}
+      <DemoPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={handlePinSuccess}
+        mode={pinModalMode}
+        amount={pendingTransfer?.amount}
+        payeeName={pendingTransfer?.payeeName}
+        payeeUpi={pendingTransfer?.counterparty}
+      />
+
+      {/* MODAL 4: PhonePe Green "Payment Successful" Modal */}
+      {showSuccessModal && successData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-5 animate-scaleUp">
+            
+            {/* Pulsing Green Success Icon */}
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+              <Check className="w-8 h-8 stroke-[3]" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-white tracking-tight">
+                {t.scanner.paymentSuccessful || 'Payment Successful'}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {currentUser.fullName} • {currentUser.bankName}
+              <p className="text-2xl font-bold text-emerald-400 font-mono">
+                ₹{Number(successData.amount).toLocaleString('en-IN')}
+              </p>
+              <p className="text-xs text-slate-400">
+                {t.scanner.paidSuccessfullyTo || 'Paid successfully to'} <span className="text-white font-semibold">{successData.payeeName}</span>
               </p>
             </div>
 
-            {/* Clean SVG QR Code Representation */}
-            <div className="bg-white p-4 rounded-2xl inline-block mx-auto shadow-inner">
-              <svg className="w-48 h-48" viewBox="0 0 100 100" fill="none">
-                <rect width="100" height="100" fill="#ffffff" />
-                {/* Outer corners */}
-                <rect x="10" y="10" width="25" height="25" rx="3" stroke="#0f172a" strokeWidth="4" />
-                <rect x="16" y="16" width="13" height="13" fill="#0f172a" />
-                
-                <rect x="65" y="10" width="25" height="25" rx="3" stroke="#0f172a" strokeWidth="4" />
-                <rect x="71" y="16" width="13" height="13" fill="#0f172a" />
-                
-                <rect x="10" y="65" width="25" height="25" rx="3" stroke="#0f172a" strokeWidth="4" />
-                <rect x="16" y="71" width="13" height="13" fill="#0f172a" />
-                
-                {/* QR Data Pattern Blocks */}
-                <rect x="42" y="12" width="6" height="6" fill="#0f172a" />
-                <rect x="52" y="12" width="6" height="12" fill="#0f172a" />
-                <rect x="42" y="24" width="16" height="6" fill="#0f172a" />
-                <rect x="12" y="42" width="6" height="16" fill="#0f172a" />
-                <rect x="24" y="42" width="12" height="6" fill="#0f172a" />
-                <rect x="24" y="52" width="6" height="6" fill="#0f172a" />
-                <rect x="42" y="42" width="16" height="16" fill="#10b981" />
-                <rect x="65" y="42" width="10" height="6" fill="#0f172a" />
-                <rect x="80" y="42" width="10" height="16" fill="#0f172a" />
-                <rect x="65" y="52" width="8" height="16" fill="#0f172a" />
-                <rect x="42" y="65" width="8" height="10" fill="#0f172a" />
-                <rect x="55" y="65" width="10" height="8" fill="#0f172a" />
-                <rect x="42" y="80" width="16" height="8" fill="#0f172a" />
-                <rect x="65" y="80" width="12" height="8" fill="#0f172a" />
-                <rect x="82" y="74" width="8" height="14" fill="#0f172a" />
-              </svg>
+            {/* Receipt Summary Card */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-left space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">{t.scanner.debitedFrom || 'Debited from'}:</span>
+                <span className="font-semibold text-slate-200">{successData.bank}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">UPI ID:</span>
+                <span className="font-mono text-emerald-400 truncate max-w-[170px]">{successData.counterparty}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-800/80 pt-2">
+                <span className="text-slate-400">{t.scanner.upiTxId || 'UPI Ref ID'}:</span>
+                <span className="font-mono text-slate-300 text-[11px]">{successData.txId}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">{language === 'kn' ? 'ಸಮಯ' : 'Time'}:</span>
+                <span className="text-slate-400 text-[11px]">{successData.date}</span>
+              </div>
             </div>
 
-            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-              <span className="font-mono text-xs font-bold text-slate-200 truncate">
-                {currentUser.upiId}
-              </span>
+            {/* Done Button */}
+            <button
+              type="button"
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition cursor-pointer shadow-lg shadow-emerald-500/20"
+            >
+              {t.scanner.doneBtn || 'Done'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: PhonePe-Style Balance Card Modal */}
+      {showBalanceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-5">
+            
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">
+                    {language === 'kn' ? 'ಬ್ಯಾಂಕ್ ಬ್ಯಾಲೆನ್ಸ್ ತಪಾಸಣೆ' : 'Bank Balance Check'}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    {currentUser.bankName} •••• {currentUser.accountLast4}
+                  </p>
+                </div>
+              </div>
+
               <button
-                onClick={copyUpiText}
-                className="p-1 px-2 rounded-lg bg-slate-800 text-slate-300 text-xs flex items-center gap-1 hover:text-white"
+                onClick={() => setShowBalanceModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
               >
-                {copiedUpi ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-500">
-              {t.quickActions.qrModalDesc}
-            </p>
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
+              <span className="text-xs text-slate-400 font-medium block">
+                {language === 'kn' ? 'ಲಭ್ಯವಿರುವ ಬ್ಯಾಲೆನ್ಸ್' : 'Available Balance'}
+              </span>
+              <span className="text-3xl font-extrabold text-white font-mono block">
+                ₹{computedMetrics.currentBalance.toLocaleString('en-IN')}.00
+              </span>
+              <span className="text-[11px] text-emerald-400 font-semibold block">
+                ✓ 100% Reconciled Double-Entry Ledger
+              </span>
+            </div>
+
+            <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">{language === 'kn' ? 'ಆರಂಭಿಕ ಮೊತ್ತ' : 'Opening Balance'}:</span>
+                <span className="font-mono text-slate-200">₹{computedMetrics.startingBalance.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-emerald-400">{language === 'kn' ? 'ಒಟ್ಟು ಸ್ವೀಕೃತಿ (ಕ್ರೆಡಿಟ್)' : 'Total Received (Credits)'}:</span>
+                <span className="font-mono text-emerald-400 font-bold">+ ₹{computedMetrics.totalInflow.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-rose-400">{language === 'kn' ? 'ಒಟ್ಟು ಪಾವತಿ (ಡೆಬಿಟ್)' : 'Total Paid (Debits)'}:</span>
+                <span className="font-mono text-rose-400 font-bold">- ₹{computedMetrics.totalOutflow.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowBalanceModal(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition cursor-pointer"
+            >
+              {language === 'kn' ? 'ಮುಚ್ಚಿ' : 'Close'}
+            </button>
           </div>
         </div>
       )}

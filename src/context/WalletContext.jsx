@@ -80,11 +80,31 @@ export function WalletProvider({ children }) {
     if (isSupabaseConfigured && supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session?.user?.email) {
-          const matched = profiles.find(p => p.email.toLowerCase() === session.user.email.toLowerCase());
+          const userEmail = session.user.email.toLowerCase();
+          const matched = profiles.find(p => p.email.toLowerCase() === userEmail);
           if (matched) {
             loginAsUser(matched.id);
           } else {
-            loginAsUser(DEFAULT_PROFILES[0].id);
+            const prefix = userEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'user';
+            const autoProfile = {
+              id: `usr_${Date.now()}`,
+              fullName: prefix.charAt(0).toUpperCase() + prefix.slice(1),
+              email: userEmail,
+              upiId: `${prefix}@okmoneymatters`,
+              phone: '+91 98765 00000',
+              bankName: 'HDFC Bank',
+              accountLast4: '5678',
+              startingBalance: 25000,
+              avatarInitials: prefix.charAt(0).toUpperCase(),
+              password: '1234',
+              demoPin: '0000',
+              demo_pin: '0000',
+              createdAt: new Date().toISOString()
+            };
+            storageService.createProfile(autoProfile).then(saved => {
+              setProfiles(prev => [...prev, saved]);
+              loginAsUser(saved.id);
+            });
           }
         }
       });
@@ -215,6 +235,8 @@ export function WalletProvider({ children }) {
       startingBalance: 25000,
       avatarInitials: (formData.fullName.trim()[0] || 'U').toUpperCase(),
       password: formData.password.trim() || '1234',
+      demoPin: formData.demoPin || formData.password.trim() || '1234',
+      demo_pin: formData.demoPin || formData.password.trim() || '1234',
       createdAt: new Date().toISOString()
     };
 

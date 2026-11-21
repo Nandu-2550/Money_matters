@@ -12,9 +12,11 @@ import {
   Eye,
   EyeOff,
   ChevronRight,
-  Shield
+  Shield,
+  QrCode
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
+import ReceiveQRModal from './ReceiveQRModal';
 
 export default function ProfileModal() {
   const { 
@@ -31,6 +33,7 @@ export default function ProfileModal() {
 
   const [copied, setCopied] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   if (!isProfileModalOpen) return null;
 
@@ -82,31 +85,49 @@ export default function ProfileModal() {
           </div>
         </div>
 
-        {/* Primary UPI ID with 1-Click Copy */}
-        <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800/80 space-y-1.5">
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-            {t.profile.upiIdLabel}
-          </span>
+        {/* Primary UPI ID with 1-Click Copy & QR View */}
+        <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800/80 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              {t.profile.upiIdLabel}
+            </span>
+            <span className="text-[10px] text-emerald-400 font-mono">
+              Sandbox PIN: {currentUser.demoPin || currentUser.demo_pin || '1234'}
+            </span>
+          </div>
+
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-sm font-bold text-slate-200">
+            <span className="font-mono text-sm font-bold text-slate-200 truncate">
               {currentUser.upiId}
             </span>
-            <button
-              onClick={handleCopyUpi}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">{t.profile.copiedUpi}</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{t.profile.copyUpi}</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowQrModal(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-xs font-medium transition cursor-pointer"
+                title="View My QR"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>{language === 'kn' ? 'QR' : 'QR'}</span>
+              </button>
+
+              <button
+                onClick={handleCopyUpi}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">{t.profile.copiedUpi}</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{t.profile.copyUpi}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -213,6 +234,12 @@ export default function ProfileModal() {
         </div>
 
       </div>
+
+      {/* Embedded Personal QR Modal */}
+      <ReceiveQRModal
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+      />
 
     </div>
   );

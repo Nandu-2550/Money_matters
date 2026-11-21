@@ -515,7 +515,7 @@ export default function LoginScreen() {
                 {t.auth.quickDemoTitle}
               </span>
               <span className="text-[10px] text-slate-400 font-mono">
-                PIN: 1234
+                {language === 'kn' ? '1-ಕ್ಲಿಕ್ ಪ್ರವೇಶ' : '1-Click Access'}
               </span>
             </div>
 
@@ -530,10 +530,15 @@ export default function LoginScreen() {
                   <div className="w-8 h-8 rounded-lg bg-slate-800 group-hover:bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
                     {profile.avatarInitials}
                   </div>
-                  <div className="truncate">
-                    <span className="text-xs font-bold text-white group-hover:text-emerald-300 block truncate">
-                      {profile.fullName}
-                    </span>
+                  <div className="truncate flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white group-hover:text-emerald-300 truncate">
+                        {profile.fullName}
+                      </span>
+                      <span className="text-[9px] bg-slate-900 px-1.5 py-0.2 rounded text-emerald-400 font-mono">
+                        PIN: {profile.demoPin || profile.demo_pin || (profile.id === 'usr_anjaneya' ? '5678' : '1234')}
+                      </span>
+                    </div>
                     <span className="text-[10px] text-slate-400 font-mono block truncate">
                       {profile.upiId}
                     </span>
