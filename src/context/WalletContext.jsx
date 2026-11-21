@@ -568,6 +568,67 @@ export function WalletProvider({ children }) {
     return { success: true, profile: matched };
   }, [profiles, activeOtpSession, loginAsUser, showToast, language]);
 
+  // Update Payment / Balance PIN (locally and persist to Supabase)
+  const updatePaymentPin = useCallback(async (userId, newPin) => {
+    const cleanPin = String(newPin || '').trim();
+    if (cleanPin.length !== 4 || !/^\d{4}$/.test(cleanPin)) {
+      return {
+        success: false,
+        error: language === 'kn' ? 'ದಯವಿಟ್ಟು 4-ಅಂಕಿಯ ಸಂಖ್ಯೆಯನ್ನು PIN ಆಗಿ ನೀಡಿ' : 'PIN must be exactly 4 numeric digits'
+      };
+    }
+
+    setProfiles(prev => prev.map(p => {
+      if (p.id === userId) {
+        return {
+          ...p,
+          demoPin: cleanPin,
+          demo_pin: cleanPin,
+          password: cleanPin
+        };
+      }
+      return p;
+    }));
+
+    // Update in localStorage
+    try {
+      const local = JSON.parse(localStorage.getItem('money_matters_profiles_v3') || '[]');
+      const updatedLocal = local.map(p => {
+        if (p.id === userId) {
+          return { ...p, demoPin: cleanPin, demo_pin: cleanPin, password: cleanPin };
+        }
+        return p;
+      });
+      localStorage.setItem('money_matters_profiles_v3', JSON.stringify(updatedLocal));
+    } catch (e) {
+      console.warn('[updatePaymentPin] localStorage warning:', e);
+    }
+
+    // Update in Supabase profiles
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            demo_pin: cleanPin,
+            password: cleanPin
+          })
+          .eq('id', userId);
+      } catch (err) {
+        console.warn('[updatePaymentPin] Supabase update warning:', err);
+      }
+    }
+
+    showToast(
+      language === 'kn'
+        ? 'ಪಾವತಿ PIN ಅನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಬದಲಾಯಿಸಲಾಗಿದೆ!'
+        : 'Payment PIN updated successfully!',
+      'success'
+    );
+
+    return { success: true };
+  }, [language, showToast]);
+
   // Top Up Safe-Wallet (from Primary Bank)
   const topUpWallet = useCallback(async (amount) => {
     const numAmount = Number(amount);
@@ -983,6 +1044,7 @@ export function WalletProvider({ children }) {
     logout,
     sendEmailVerification,
     verifyEmailOtp,
+    updatePaymentPin,
     activeOtpSession,
     transactions,
     language,

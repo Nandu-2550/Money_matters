@@ -1161,10 +1161,10 @@ export default function ScannerSimulator() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white leading-tight">
-                    {language === 'kn' ? 'ಬ್ಯಾಂಕ್ ಬ್ಯಾಲೆನ್ಸ್ ತಪಾಸಣೆ' : 'Bank Balance Check'}
+                    {language === 'kn' ? 'ಸುರಕ್ಷಿತ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್' : 'Safe-Wallet Balance Check'}
                   </h3>
                   <p className="text-[10px] text-slate-400 leading-tight">
-                    {currentUser.bankName} •••• {currentUser.accountLast4}
+                    {currentUser.walletId || currentUser.upiId || 'Personal Safe-Wallet'}
                   </p>
                 </div>
               </div>

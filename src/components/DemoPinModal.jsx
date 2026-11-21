@@ -20,13 +20,18 @@ export default function DemoPinModal({
   payeeName = '',
   payeeUpi = ''
 }) {
-  const { currentUser, language, t } = useWallet();
+  const { currentUser, language, t, setIsProfileModalOpen } = useWallet();
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isShaking, setIsShaking] = useState(false);
 
   // Expected PIN is user's sandbox demo_pin, default fallback '1234'
-  const expectedPin = currentUser?.demoPin || currentUser?.demo_pin || (currentUser?.id === 'usr_anjaneya' ? '5678' : '1234');
+  const expectedPin = String(
+    currentUser?.demoPin || 
+    currentUser?.demo_pin || 
+    currentUser?.password || 
+    (currentUser?.id === 'usr_anjaneya' ? '5678' : '1234')
+  ).trim();
 
   // Reset state on open
   useEffect(() => {
@@ -136,11 +141,11 @@ export default function DemoPinModal({
         <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800/80 space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400">
-              {language === 'kn' ? 'ಖಾತೆ:' : 'Account:'}
+              {language === 'kn' ? 'ಸುರಕ್ಷಿತ ವಾಲೆಟ್:' : 'Safe Wallet:'}
             </span>
-            <span className="font-semibold text-slate-200 flex items-center gap-1">
-              <Landmark className="w-3 h-3 text-slate-400" />
-              {currentUser.bankName} •••• {currentUser.accountLast4}
+            <span className="font-semibold text-slate-200 flex items-center gap-1 truncate max-w-[210px]">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate">{currentUser.walletId || currentUser.upiId || 'Personal Safe-Wallet'}</span>
             </span>
           </div>
 
@@ -250,6 +255,20 @@ export default function DemoPinModal({
             title="Authorize"
           >
             <Check className="w-5 h-5 stroke-[3]" />
+          </button>
+        </div>
+
+        {/* Forgot PIN Link to Email-Verified Profile Reset */}
+        <div className="pt-2 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              setIsProfileModalOpen(true);
+            }}
+            className="text-[11px] text-slate-400 hover:text-emerald-400 transition underline underline-offset-2 cursor-pointer font-medium"
+          >
+            {language === 'kn' ? 'PIN ಮರೆತಿರುವಿರಾ? ಇಮೇಲ್ ಪರಿಶೀಲನೆ ಮೂಲಕ ಮರುಹೊಂದಿಸಿ' : 'Forgot PIN? Reset via Email in Profile'}
           </button>
         </div>
       </div>

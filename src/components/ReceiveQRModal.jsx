@@ -82,8 +82,8 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
             {currentUser.fullName}
           </h4>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-[11px] text-slate-300">
-            <Landmark className="w-3 h-3 text-slate-400" />
-            <span>{currentUser.bankName} •••• {currentUser.accountLast4}</span>
+            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+            <span>Safe-Wallet Vault • {activeWalletId}</span>
           </div>
         </div>
 

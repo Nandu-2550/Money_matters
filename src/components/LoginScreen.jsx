@@ -52,8 +52,6 @@ export default function LoginScreen() {
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regUpiId, setRegUpiId] = useState('');
-  const [regBankName, setRegBankName] = useState('HDFC Bank');
-  const [regAccountLast4, setRegAccountLast4] = useState('');
   const [regPassword, setRegPassword] = useState('1234');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
@@ -207,9 +205,10 @@ export default function LoginScreen() {
       email: regEmail.trim(),
       phone: formattedPhone,
       upiId: regUpiId.trim(),
-      bankName: regBankName,
-      accountLast4: regAccountLast4.trim() || '5678',
-      password: regPassword.trim()
+      bankName: 'Safe-Wallet Vault',
+      accountLast4: '0001',
+      password: regPassword.trim(),
+      demoPin: regPassword.trim()
     });
     setIsSubmitting(false);
 
@@ -613,39 +612,17 @@ export default function LoginScreen() {
                 </div>
               </div>
 
-              {/* Bank Name & Last 4 Digits */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                    {t.auth.bankNameLabel}
-                  </label>
-                  <select
-                    value={regBankName}
-                    onChange={(e) => setRegBankName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-2.5 py-2 text-xs text-white outline-none transition"
-                  >
-                    <option value="HDFC Bank">HDFC Bank</option>
-                    <option value="ICICI Bank">ICICI Bank</option>
-                    <option value="State Bank of India">State Bank of India</option>
-                    <option value="Axis Bank">Axis Bank</option>
-                    <option value="Canara Bank">Canara Bank</option>
-                    <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                  </select>
+              {/* Safe-Wallet Vault Assurance */}
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-semibold text-slate-200">
+                    {language === 'kn' ? 'ವೈಯಕ್ತಿಕ ಸುರಕ್ಷಿತ ವಾಲೆಟ್ ವಾಲ್ಟ್' : 'Personal Safe-Wallet Vault'}
+                  </span>
                 </div>
-
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                    {t.auth.accountLast4Label}
-                  </label>
-                  <input
-                    type="text"
-                    maxLength="4"
-                    value={regAccountLast4}
-                    onChange={(e) => setRegAccountLast4(e.target.value.replace(/\D/g, ''))}
-                    placeholder={t.auth.accountLast4Placeholder}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none transition font-mono"
-                  />
-                </div>
+                <span className="text-[10px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  ₹5,000 Opening Funds
+                </span>
               </div>
 
               {/* Security PIN / Password */}
