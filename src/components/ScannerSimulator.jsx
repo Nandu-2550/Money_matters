@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
   ShieldCheck, 
   ShieldAlert, 
   ArrowDownLeft, 
   ArrowUpRight, 
   AlertCircle, 
+  AlertTriangle,
   CheckCircle2, 
   ArrowRight,
   Smartphone,
@@ -18,10 +19,13 @@ import {
   Lock,
   Sparkles,
   ExternalLink,
-  User
+  User,
+  Volume2,
+  FileText
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { findMatchingProfile } from '../lib/supabaseClient';
+import { analyzePaymentContext } from '../utils/fraudEngine';
 import QRScannerModal from './QRScannerModal';
 import ReceiveQRModal from './ReceiveQRModal';
 import DemoPinModal from './DemoPinModal';
@@ -162,10 +166,135 @@ export default function ScannerSimulator() {
     );
   };
 
+  // Real-time Context Analysis using user's engine
+  const contextAnalysis = useMemo(() => {
+    return analyzePaymentContext({
+      message,
+      recipientId: counterparty,
+      amount: Number(amount) || 0,
+      txType: isCollectRequest ? 'COLLECT_REQUEST' : (category === 'Investment' ? 'INVESTMENT' : 'P2P_TRANSFER')
+    });
+  }, [message, counterparty, amount, isCollectRequest, category]);
+
+  // Handle message typing / pasting with extracted handle auto-fill
+  const handleMessageChange = (e) => {
+    const val = e.target.value;
+    setMessage(val);
+
+    // If counterparty field is currently empty, check for extracted handles in pasted text
+    if (!counterparty.trim()) {
+      const handles = val.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+/g) || [];
+      if (handles.length > 0) {
+        setCounterparty(handles[0]);
+        showToast?.(
+          language === 'kn'
+            ? `ಸಂದೇಶದಿಂದ ಸ್ವೀಕೃತಿದಾರರ ಹ್ಯಾಂಡಲ್ (${handles[0]}) ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಭರ್ತಿ ಮಾಡಲಾಗಿದೆ!`
+            : `Auto-filled recipient handle (${handles[0]}) from pasted message!`,
+          'info'
+        );
+      }
+    }
+  };
+
+  // Kannada / English Voice Warning
+  const playVoiceWarning = useCallback(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const warningText = language === 'kn'
+        ? 'ಎಚ್ಚರಿಕೆ! ಈ ಪಾವತಿಯು ಹೆಚ್ಚಿನ ವಂಚನೆಯ ಅಪಾಯವನ್ನು ಹೊಂದಿದೆ. ಸುರಕ್ಷತಾ ಶೀಲ್ಡ್ ಮೂಲಕ ನೇರ ಪಾವತಿಯನ್ನು ತಡೆಹಿಡಿಯಲಾಗಿದೆ.'
+        : 'Warning! High fraud risk detected in this payment. Direct payment has been blocked by the security shield.';
+      const utterance = new SpeechSynthesisUtterance(warningText);
+      utterance.lang = language === 'kn' ? 'kn-IN' : 'en-US';
+      utterance.rate = 0.92;
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [language]);
+
+  const hasSpokenRef = useRef(false);
+  useEffect(() => {
+    if (contextAnalysis.isFraud) {
+      if (!hasSpokenRef.current) {
+        hasSpokenRef.current = true;
+        playVoiceWarning();
+      }
+    } else {
+      hasSpokenRef.current = false;
+    }
+  }, [contextAnalysis.isFraud, playVoiceWarning]);
+
+  // Route directly to Family Guardian Review Queue
+  const handleSendToGuardianQueue = async () => {
+    setFormError('');
+    const parsedAmount = Number(amount);
+    if (!counterparty.trim() || !parsedAmount || parsedAmount <= 0) {
+      setFormError(
+        language === 'kn'
+          ? 'ದಯವಿಟ್ಟು ಸ್ವೀಕೃತಿದಾರರ UPI ID ಮತ್ತು ಮಾನ್ಯ ಮೊತ್ತವನ್ನು ನಮೂದಿಸಿ'
+          : 'Please enter recipient UPI ID / Phone and valid amount'
+      );
+      return;
+    }
+
+    const matchedRecipient = findMatchingProfile(counterparty, profiles);
+    const payeeName = matchedRecipient ? matchedRecipient.fullName : counterparty.trim();
+
+    setIsScanning(true);
+    setScanResult(null);
+
+    const result = await submitTransaction({
+      direction,
+      counterparty: counterparty.trim(),
+      amount: parsedAmount,
+      category,
+      message,
+      isCollectRequest: direction === 'IN' ? isCollectRequest : false,
+      payeeName
+    });
+
+    setIsScanning(false);
+    setCounterparty('');
+    setAmount('');
+    setMessage('');
+
+    showToast?.(
+      language === 'kn'
+        ? 'ವಂಚನೆಯ ವಹಿವಾಟು ಕುಟುಂಬ ರಕ್ಷಕ ಪರಿಶೀಲನಾ ಸರದಿಗೆ ಸುರಕ್ಷಿತವಾಗಿ ರವಾನಿಸಲಾಗಿದೆ!'
+        : 'Suspicious payment securely routed to Family Guardian Review Queue!',
+      'warning'
+    );
+    setActiveTab('queue');
+  };
+
+  // Cancel Payment action
+  const handleCancelPayment = () => {
+    setMessage('');
+    setCounterparty('');
+    setAmount('');
+    setFormError('');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    showToast?.(
+      language === 'kn' ? 'ಪಾವತಿ ರದ್ದುಗೊಳಿಸಲಾಗಿದೆ.' : 'Payment cancelled safely.',
+      'info'
+    );
+  };
+
   // Initiate Payment Submission (Validates and triggers Sandbox PIN Modal)
   const handleInitiatePayment = (e) => {
     e?.preventDefault();
     setFormError('');
+
+    // Automatic Payment Gate Check
+    if (contextAnalysis.isFraud) {
+      setFormError(
+        language === 'kn'
+          ? 'ಹೆಚ್ಚಿನ ವಂಚನೆಯ ಅಪಾಯ ಪತ್ತೆಯಾಗಿದೆ! ನೇರ ಪಾವತಿಯನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ. ದಯವಿಟ್ಟು ರಕ್ಷಕ ಪರಿಶೀಲನಾ ಸರದಿಗೆ ಕಳುಹಿಸಿ.'
+          : 'High fraud risk detected! Direct payment execution is blocked. Please route to Family Guardian Review Queue.'
+      );
+      playVoiceWarning();
+      return;
+    }
 
     const parsedAmount = Number(amount);
     if (!counterparty.trim() || !parsedAmount || parsedAmount <= 0) {
@@ -548,19 +677,131 @@ export default function ScannerSimulator() {
               </div>
             </div>
 
-            {/* Notes / Message */}
+            {/* Paste Received Message / Payment Context (Optional) */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                {t.scanner.messageLabel}
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>
+                    {language === 'kn' 
+                      ? 'ಸ್ವೀಕರಿಸಿದ ಸಂದೇಶ / ಪಾವತಿ ವಿವರ ನಮೂದಿಸಿ (ಐಚ್ಛಿಕ)' 
+                      : 'Paste Received Message / Payment Context (Optional)'}
+                  </span>
+                </label>
+                {contextAnalysis.extractedHandles.length > 0 && (
+                  <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    <Check className="w-2.5 h-2.5" />
+                    <span>Handle: {contextAnalysis.extractedHandles[0]}</span>
+                  </span>
+                )}
+              </div>
               <textarea
-                rows="2"
+                id="payment-context-textarea"
+                rows="3"
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={t.scanner.messagePlaceholder}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-2xl px-3.5 py-2 text-sm text-white placeholder-slate-500 outline-none transition resize-none"
+                onChange={handleMessageChange}
+                placeholder={
+                  language === 'kn'
+                    ? 'ವಂಚನೆಯನ್ನು ನೈಜ ಸಮಯದಲ್ಲಿ ಪತ್ತೆಹಚ್ಚಲು WhatsApp ಸ್ಟಾಕ್ ಸಲಹೆ, SMS ಬ್ಯಾಂಕ್ ಎಚ್ಚರಿಕೆ, ನಕಲಿ KYC ಅಥವಾ ಪಾವತಿ ಸಂದೇಶವನ್ನು ಇಲ್ಲಿ ಪೇಸ್ಟ್ ಮಾಡಿ...'
+                    : 'Paste full SMS, WhatsApp tip, fake KYC alert, APK link, or payment request to analyze risk in real-time...'
+                }
+                className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-2xl p-3 text-xs sm:text-sm text-white placeholder-slate-500 outline-none transition resize-y font-sans leading-relaxed"
               />
             </div>
+
+            {/* Real-Time Context Analysis & Automatic Payment Gate */}
+            {message.trim().length > 0 && (
+              <>
+                {contextAnalysis.isFraud ? (
+                  /* Prominent Red Alert Card */
+                  <div className="p-4 rounded-2xl bg-rose-500/10 border-2 border-rose-500/40 text-left space-y-3 animate-fadeIn">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center shrink-0 shadow-sm">
+                          <AlertTriangle className="w-4 h-4 text-rose-400" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black uppercase tracking-wider text-rose-300 block">
+                            {language === 'kn' ? 'ಗಂಭೀರ ವಂಚನೆಯ ಎಚ್ಚರಿಕೆ' : 'High Fraud Risk Detected'}
+                          </span>
+                          <span className="text-[11px] text-rose-400 font-mono font-bold">
+                            Risk Score: {contextAnalysis.riskScore}/100 • {contextAnalysis.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={playVoiceWarning}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition cursor-pointer"
+                        title={language === 'kn' ? 'ಧ್ವನಿ ಎಚ್ಚರಿಕೆಯನ್ನು ಮತ್ತೆ ಕೇಳಿ' : 'Listen to Voice Warning'}
+                      >
+                        <Volume2 className="w-3.5 h-3.5 text-rose-300" />
+                        <span className="hidden sm:inline">{language === 'kn' ? 'ಧ್ವನಿ ಎಚ್ಚರಿಕೆ' : 'Voice'}</span>
+                      </button>
+                    </div>
+
+                    {/* Triggered reason flags */}
+                    <div className="space-y-1.5 pt-2 border-t border-rose-500/20">
+                      <span className="text-[11px] font-bold text-rose-300 uppercase tracking-wider block">
+                        {language === 'kn' ? 'ಪತ್ತೆಯಾದ ವಂಚನೆ ಅಪಾಯಗಳು:' : 'Triggered Fraud Indicators:'}
+                      </span>
+                      {contextAnalysis.flags.map((flag, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-xs text-rose-200 bg-rose-950/40 p-2 rounded-xl border border-rose-500/20">
+                          <span className="text-rose-400 font-bold shrink-0 mt-0.5">•</span>
+                          <span className="leading-relaxed font-medium">
+                            {language === 'kn' && contextAnalysis.flagsKn?.[idx] ? contextAnalysis.flagsKn[idx] : flag}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Gate Action Buttons */}
+                    <div className="pt-2 border-t border-rose-500/20 flex flex-col sm:flex-row items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSendToGuardianQueue}
+                        disabled={isScanning}
+                        className="w-full sm:flex-1 py-2.5 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/10"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>
+                          {language === 'kn' 
+                            ? 'ಕುಟುಂಬ ರಕ್ಷಕ ಪರಿಶೀಲನಾ ಸರದಿಗೆ ಕಳುಹಿಸಿ' 
+                            : 'Send to Family Guardian Review Queue'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCancelPayment}
+                        className="w-full sm:w-auto py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs transition cursor-pointer"
+                      >
+                        {language === 'kn' ? 'ರದ್ದುಗೊಳಿಸಿ' : 'Cancel'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Green Message Verified Safe Badge */
+                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-between animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold block">
+                          {language === 'kn' ? 'ಸಂದೇಶ ಪರಿಶೀಲಿಸಲಾಗಿದೆ: ಸುರಕ್ಷಿತ' : 'Message Verified Safe'}
+                        </span>
+                        <span className="text-[10px] text-emerald-500/80 block">
+                          {language === 'kn' ? 'ಯಾವುದೇ ಅಪಾಯಕಾರಿ ಲಿಂಕ್ ಅಥವಾ ವಂಚನೆಯ ಸೂಚಕಗಳಿಲ್ಲ' : 'No malicious links or harvesting red flags detected'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                      Risk: {contextAnalysis.riskScore}/100
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Incoming Mode: Collect Request Checkbox */}
             {direction === 'IN' && (
@@ -584,24 +825,37 @@ export default function ScannerSimulator() {
               </div>
             )}
 
-            {/* Submit Button (Proceed to Pay) */}
-            <button
-              type="submit"
-              disabled={isScanning}
-              className="w-full py-3 px-4 rounded-2xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-lg shadow-emerald-500/20"
-            >
-              {isScanning ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  <span>{t.scanner.scanning}</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4 stroke-[2.5]" />
-                  <span>{direction === 'OUT' ? (t.scanner.proceedToPay || 'Proceed to Pay') : t.scanner.scanBtn}</span>
-                </>
-              )}
-            </button>
+            {/* Submit Button (Proceed to Pay) - Blocked when isFraud is true */}
+            {!contextAnalysis.isFraud ? (
+              <button
+                type="submit"
+                disabled={isScanning}
+                className="w-full py-3 px-4 rounded-2xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+              >
+                {isScanning ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    <span>{t.scanner.scanning}</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 stroke-[2.5]" />
+                    <span>{direction === 'OUT' ? (t.scanner.proceedToPay || 'Proceed to Pay') : t.scanner.scanBtn}</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="p-3 rounded-2xl bg-slate-950 border border-rose-500/30 text-center">
+                <span className="text-xs font-semibold text-rose-400 flex items-center justify-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>
+                    {language === 'kn' 
+                      ? 'ನೇರ ಪಾವತಿಯನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ — ರಕ್ಷಕ ಪರಿಶೀಲನಾ ಸರದಿಗೆ ಕಳುಹಿಸಿ' 
+                      : 'Direct Payment Blocked — Route to Family Review Queue above'}
+                  </span>
+                </span>
+              </div>
+            )}
           </form>
         </div>
 
@@ -696,6 +950,88 @@ export default function ScannerSimulator() {
                 )}
               </div>
             </div>
+          ) : message.trim().length > 0 ? (
+            /* Live Message Context Telemetry Card on Desktop */
+            <div className={`h-full rounded-3xl p-5 sm:p-6 border shadow-sm flex flex-col justify-between animate-fadeIn ${
+              contextAnalysis.isFraud 
+                ? 'bg-slate-900 border-rose-500/40' 
+                : 'bg-slate-900 border-emerald-500/30'
+            }`}>
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    {contextAnalysis.isFraud ? (
+                      <ShieldAlert className="w-4 h-4 text-rose-400" />
+                    ) : (
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    )}
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                      {language === 'kn' ? 'ನೈಜ-ಸಮಯ ಸಂದೇಶ ವಿಶ್ಲೇಷಣೆ' : 'Real-Time Message Analysis'}
+                    </span>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    contextAnalysis.isFraud
+                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  }`}>
+                    {contextAnalysis.status}
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 mb-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">{t.scanner.riskScore}</span>
+                    <span className={`text-2xl font-bold font-mono ${
+                      contextAnalysis.riskScore >= 60
+                        ? 'text-rose-400'
+                        : contextAnalysis.riskScore >= 30
+                        ? 'text-amber-400'
+                        : 'text-emerald-400'
+                    }`}>
+                      {contextAnalysis.riskScore} / 100
+                    </span>
+                  </div>
+                  <span className={`px-3 py-1 rounded-xl text-xs font-bold ${
+                    contextAnalysis.isFraud
+                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {contextAnalysis.isFraud ? 'HIGH RISK' : 'SAFE'}
+                  </span>
+                </div>
+
+                {contextAnalysis.flags.length > 0 ? (
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-slate-300 block">
+                      {language === 'kn' ? 'ಪತ್ತೆಯಾದ ಅಂಶಗಳು:' : 'Detected Flags:'}
+                    </span>
+                    <ul className="space-y-1.5">
+                      {contextAnalysis.flags.map((flag, i) => (
+                        <li key={i} className="text-xs text-rose-300 flex items-start gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-rose-500/20">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                          <span>{language === 'kn' && contextAnalysis.flagsKn?.[i] ? contextAnalysis.flagsKn[i] : flag}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      {language === 'kn' 
+                        ? 'ಸಂದೇಶದಲ್ಲಿ ಯಾವುದೇ ವಂಚನೆಯ ಲಿಂಕ್ ಅಥವಾ PIN ಕದಿಯುವ ಸೂಚನೆಗಳಿಲ್ಲ.' 
+                        : 'Clean context. No malicious URLs, APK links, or PIN harvesting indicators.'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-slate-800">
+                <span className="text-[10px] text-slate-500 block text-center">
+                  {language === 'kn' ? 'ನೈಜ ಸಮಯದಲ್ಲಿ ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ' : 'Updating live as you type or paste context'}
+                </span>
+              </div>
+            </div>
           ) : (
             <div className="h-full rounded-3xl p-6 bg-slate-900 border border-slate-800 shadow-sm flex flex-col items-center justify-center text-center space-y-3 min-h-[300px]">
               <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500">
@@ -708,7 +1044,7 @@ export default function ScannerSimulator() {
                 <p className="text-xs text-slate-500 leading-relaxed">
                   {language === 'kn' 
                     ? 'ಹಣ ಕಳುಹಿಸಲು ಅಥವಾ ಸ್ವೀಕರಿಸಲು ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಮತ್ತು ಸ್ಯಾಂಡ್‌ಬಾಕ್ಸ್ PIN ನೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.'
-                    : 'Enter payment details above to run SEBI/NPCI checks and authorize with your sandbox PIN.'}
+                    : 'Paste any WhatsApp message, SMS tip, or payment request to analyze risk in real time.'}
                 </p>
               </div>
             </div>

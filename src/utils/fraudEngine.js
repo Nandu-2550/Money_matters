@@ -50,6 +50,85 @@ const SUSPICIOUS_URL_PATTERNS = [
   /mediafire\.com/i
 ];
 
+/**
+ * Real-Time Payment Context & Message Analyzer
+ * Evaluates full pasted SMS, email, or WhatsApp messages for fraud red flags.
+ */
+export function analyzePaymentContext({ message = '', recipientId = '', amount = 0, txType = 'P2P_TRANSFER' }) {
+  const text = `${message} ${recipientId}`.toLowerCase();
+  let score = 0;
+  const flags = [];
+  const flagsKn = [];
+
+  // 1. Detect malicious .apk download links or suspicious URLs
+  const hasApk = /\.apk(\b|\?|#)/i.test(text);
+  const urls = message.match(/https?:\/\/[^\s]+/gi) || [];
+  if (hasApk) {
+    score += 55;
+    flags.push('Malicious .apk file link detected (never install apps from SMS/email links)');
+    flagsKn.push('ಅಪಾಯಕಾರಿ .apk ಫೈಲ್ ಲಿಂಕ್ ಪತ್ತೆಯಾಗಿದೆ (SMS ಅಥವಾ ಇಮೇಲ್ ಲಿಂಕ್‌ಗಳಿಂದ ಅಪ್ಲಿಕೇಶನ್‌ಗಳನ್ನು ಎಂದಿಗೂ ಡೌನ್‌ಲೋಡ್ ಮಾಡಬೇಡಿ)');
+  } else if (urls.length > 0) {
+    score += 25;
+    flags.push('External link found inside payment message');
+    flagsKn.push('ಪಾವತಿ ಸಂದೇಶದಲ್ಲಿ ಬಾಹ್ಯ ಲಿಂಕ್ ಕಂಡುಬಂದಿದೆ');
+  }
+
+  // 2. Detect PIN / OTP harvesting attempts
+  if (/(enter|share|type|send).{0,25}(pin|otp|password|cvv)/i.test(text)) {
+    score += 45;
+    flags.push('Asks you to enter or share your Wallet PIN or OTP');
+    flagsKn.push('ನಿಮ್ಮ ವಾಲೆಟ್ PIN ಅಥವಾ OTP ನಮೂದಿಸಲು ಅಥವಾ ಹಂಚಿಕೊಳ್ಳಲು ಕೇಳಲಾಗುತ್ತಿದೆ');
+  }
+
+  // 3. Detect fake KYC / Account Freeze / Urgency threats
+  if (/(permanently blocked|account freeze|suspended|re-kyc|kyc verification|penalty charges|within \d+ (hour|min))/i.test(text)) {
+    score += 35;
+    flags.push('Fake KYC suspension or urgency threat detected');
+    flagsKn.push('ನಕಲಿ KYC ಅಮಾನತು ಅಥವಾ ತುರ್ತು ಬೆದರಿಕೆ ಪತ್ತೆಯಾಗಿದೆ');
+  }
+
+  // 4. Detect Fake Cashback / Reward "Collect Request" PIN traps
+  if (txType === 'COLLECT_REQUEST' || /(collect request|cashback voucher|you won|claim your prize|release funds)/i.test(text)) {
+    score += 45;
+    flags.push('Fake reward or Collect Request trap (you never enter a PIN to receive money)');
+    flagsKn.push('ನಕಲಿ ಬಹುಮಾನ ಅಥವಾ ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ಬಲೆ (ಹಣ ಪಡೆಯಲು ಎಂದಿಗೂ PIN ನಮೂದಿಸುವ ಅಗತ್ಯವಿಲ್ಲ)');
+  }
+
+  // 5. Extract any embedded UPI / Wallet handles and verify SEBI @valid rules
+  const extractedHandles = message.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+/g) || [];
+  const allHandles = [...new Set([recipientId, ...extractedHandles].filter(Boolean))];
+  const isInvestmentPitch = /(ipo|demat|guaranteed|weekly returns|nifty|broker|trading slot|allotment)/i.test(text);
+
+  for (const handle of allHandles) {
+    const lowerHandle = handle.toLowerCase();
+    const isSebiValid = lowerHandle.endsWith('.brk@valid') || lowerHandle.endsWith('.mf@valid');
+    if (isInvestmentPitch && !isSebiValid) {
+      score += 50;
+      flags.push(`Unverified investment handle (${handle}) — legitimate brokers use .brk@valid or .mf@valid`);
+      flagsKn.push(`ಅನಧಿಕೃತ ಹೂಡಿಕೆ ಹ್ಯಾಂಡಲ್ (${handle}) — ಅಧಿಕೃತ ಬ್ರೋಕರ್‌ಗಳು .brk@valid ಅಥವಾ .mf@valid ಬಳಸುತ್ತಾರೆ`);
+    }
+  }
+
+  // 6. High-value transfer caution
+  if (Number(amount) >= 10000) {
+    score += 15;
+    flags.push('High-value transfer above ₹10,000');
+    flagsKn.push('₹10,000 ಕ್ಕಿಂತ ಹೆಚ್ಚಿನ ಮೊತ್ತದ ವರ್ಗಾವಣೆ');
+  }
+
+  const finalScore = Math.min(score, 100);
+  const isFraud = finalScore >= 60;
+
+  return {
+    riskScore: finalScore,
+    isFraud,
+    status: isFraud ? 'BLOCKED_OR_GUARDIAN_REVIEW' : 'SAFE_TO_PAY',
+    flags,
+    flagsKn,
+    extractedHandles,
+  };
+}
+
 export function scoreTransaction(tx) {
   const direction = (tx.direction || 'OUT').toUpperCase();
   const amount = Number(tx.amount) || 0;
