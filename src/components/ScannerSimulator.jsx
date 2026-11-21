@@ -805,6 +805,7 @@ export default function ScannerSimulator() {
         isOpen={isTopUpModalOpen}
         onClose={() => setIsTopUpModalOpen(false)}
         onConfirm={topUpWallet}
+        onProceedTopUp={topUpWallet}
       />
 
       {/* MODAL 5: Signed Offline Payment Voucher QR Modal */}

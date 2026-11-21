@@ -716,14 +716,19 @@ export function WalletProvider({ children }) {
 
   // Reset demo data
   const resetDemoData = useCallback(async () => {
-    const fresh = await storageService.resetUserTransactions(currentUser.id);
-    setTransactions(fresh);
-    showToast(
-      language === 'kn'
-        ? 'ಡೆಮೊ ಡೇಟಾ ಮರುಹೊಂದಿಸಲಾಗಿದೆ.'
-        : `Reset ${currentUser.fullName}'s safe wallet to default state.`,
-      'info'
-    );
+    try {
+      if (!currentUser?.id) return;
+      const fresh = await storageService.resetUserTransactions(currentUser.id);
+      setTransactions(fresh);
+      showToast(
+        language === 'kn'
+          ? 'ಡೆಮೊ ಡೇಟಾ ಮರುಹೊಂದಿಸಲಾಗಿದೆ.'
+          : `Reset ${currentUser.fullName}'s safe wallet to default state.`,
+        'info'
+      );
+    } catch (err) {
+      console.warn('[resetDemoData] Error:', err);
+    }
   }, [currentUser, language, showToast]);
 
   const promptInstall = useCallback(async () => {

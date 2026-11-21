@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
-export default function TopUpModal({ isOpen, onClose, onProceedTopUp }) {
+export default function TopUpModal({ isOpen, onClose, onProceedTopUp, onConfirm }) {
   const { currentUser, language } = useWallet();
   const [topUpAmount, setTopUpAmount] = useState('1000');
   const [errorMsg, setErrorMsg] = useState('');
@@ -31,8 +31,13 @@ export default function TopUpModal({ isOpen, onClose, onProceedTopUp }) {
       setErrorMsg(language === 'kn' ? 'ಗರಿಷ್ಠ ಟಾಪ್-ಅಪ್ ಮಿತಿ ₹50,000' : 'Maximum wallet load limit is ₹50,000');
       return;
     }
-    onProceedTopUp(amt);
-    onClose();
+    const callback = onConfirm || onProceedTopUp;
+    if (typeof callback === 'function') {
+      callback(amt);
+    }
+    if (typeof onClose === 'function') {
+      onClose();
+    }
   };
 
   return (
