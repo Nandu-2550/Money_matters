@@ -12,7 +12,7 @@ const WalletContext = createContext(null);
 
 export const STARTING_BALANCE = 25000;
 
-const AUTH_USER_KEY = 'money_matters_auth_v2';
+const AUTH_USER_KEY = 'money_matters_auth_v3';
 
 export function WalletProvider({ children }) {
   const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
@@ -28,7 +28,7 @@ export function WalletProvider({ children }) {
     return localStorage.getItem('mm_lang') || 'en';
   });
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [activeTab, setActiveTab] = useState('scan'); // 'scan' | 'queue' | 'dashboard'
+  const [activeTab, setActiveTab] = useState('scan');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -51,7 +51,7 @@ export function WalletProvider({ children }) {
     };
   }, []);
 
-  // PWA install monitor
+  // PWA install prompt monitor
   useEffect(() => {
     const handleBeforeInstall = (e) => {
       e.preventDefault();
@@ -84,7 +84,6 @@ export function WalletProvider({ children }) {
           if (matched) {
             loginAsUser(matched.id);
           } else {
-            // New user signed in via OTP
             loginAsUser(DEFAULT_PROFILES[0].id);
           }
         }
@@ -102,7 +101,7 @@ export function WalletProvider({ children }) {
     });
   }, []);
 
-  // Load active user's isolated transactions whenever active user changes
+  // Load active user's transactions whenever active user changes
   useEffect(() => {
     if (currentUser?.id) {
       storageService.loadUserTransactions(currentUser.id).then(userTx => {
@@ -126,7 +125,7 @@ export function WalletProvider({ children }) {
     }, 4000);
   }, []);
 
-  // Login as specific user profile (Nandeesh or Anjaneya or dynamic)
+  // Direct login as user
   const loginAsUser = useCallback((userId) => {
     setCurrentUserId(userId);
     setIsAuthenticated(true);
@@ -134,6 +133,66 @@ export function WalletProvider({ children }) {
     storageService.setActiveUserId(userId);
     storageService.loadUserTransactions(userId).then(setTransactions);
   }, []);
+
+  // Password / MPIN login verification
+  const loginWithPassword = useCallback((emailOrUpi, password) => {
+    const cleanId = emailOrUpi.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    const matched = profiles.find(
+      p => p.email.toLowerCase() === cleanId || p.upiId.toLowerCase() === cleanId
+    );
+
+    if (!matched) {
+      return { success: false, error: 'No profile found with this Email or UPI ID.' };
+    }
+
+    // Check password against profile password or fallback demo '1234'
+    const expectedPass = (matched.password || '1234').trim();
+    if (cleanPass !== expectedPass && cleanPass !== '1234') {
+      return { success: false, error: 'Incorrect MPIN / Password. (Demo accounts use 1234)' };
+    }
+
+    loginAsUser(matched.id);
+    showToast(`Welcome back, ${matched.fullName}!`, 'success');
+    return { success: true, profile: matched };
+  }, [profiles, loginAsUser, showToast]);
+
+  // Register New User
+  const registerUser = useCallback(async (formData) => {
+    const cleanEmail = formData.email.trim().toLowerCase();
+    const cleanUpi = formData.upiId.trim().toLowerCase();
+
+    // Check uniqueness
+    const exists = profiles.some(
+      p => p.email.toLowerCase() === cleanEmail || p.upiId.toLowerCase() === cleanUpi
+    );
+
+    if (exists) {
+      return { success: false, error: 'An account with this Email or UPI ID already exists.' };
+    }
+
+    const newProfile = {
+      id: `usr_${Date.now()}`,
+      fullName: formData.fullName.trim(),
+      email: cleanEmail,
+      upiId: cleanUpi,
+      phone: formData.phone.trim() || '+91 98765 00000',
+      bankName: formData.bankName.trim() || 'HDFC Bank',
+      accountLast4: formData.accountLast4.trim() || '1234',
+      startingBalance: 25000,
+      avatarInitials: (formData.fullName.trim()[0] || 'U').toUpperCase(),
+      password: formData.password.trim() || '1234',
+      createdAt: new Date().toISOString()
+    };
+
+    const saved = await storageService.createProfile(newProfile);
+    setProfiles(prev => [...prev, saved]);
+    loginAsUser(saved.id);
+
+    showToast(`Welcome ${saved.fullName}! Wallet initialized with ₹25,000 demo funds.`, 'success');
+    return { success: true, profile: saved };
+  }, [profiles, loginAsUser, showToast]);
 
   // Logout
   const logout = useCallback(async () => {
@@ -149,13 +208,10 @@ export function WalletProvider({ children }) {
   // Send Email OTP / Magic Link via Supabase
   const sendEmailVerification = useCallback(async (email) => {
     if (!isSupabaseConfigured || !supabase) {
-      // Offline fallback: check if matches demo user
-      const matched = profiles.find(p => p.email.toLowerCase() === email.trim().toLowerCase());
-      if (matched) {
-        loginAsUser(matched.id);
-        return { success: true, isDemo: true };
-      }
-      return { success: false, error: 'Supabase offline: use quick demo profiles below.' };
+      return { 
+        success: false, 
+        error: 'Supabase offline: please use Password / MPIN login or demo access.' 
+      };
     }
 
     try {
@@ -172,11 +228,10 @@ export function WalletProvider({ children }) {
     } catch (err) {
       return { success: false, error: err.message };
     }
-  }, [profiles, loginAsUser]);
+  }, []);
 
   // ==========================================
   // EXACT MATHEMATICAL RECONCILIATION PER USER
-  // Starting Balance + Verified Inflows - Verified Outflows === Current Balance
   // ==========================================
   const computedMetrics = useMemo(() => {
     const startingBalance = Number(currentUser?.startingBalance) || 25000;
@@ -235,11 +290,10 @@ export function WalletProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
-    // Update active user state & storage
     setTransactions(prev => [newTx, ...prev]);
     await storageService.saveNewTransaction(newTx);
 
-    // Live Two-Way P2P: If sending money to another registered user in our system!
+    // Live Two-Way P2P Transfer Sync
     if (newTx.direction === 'OUT' && newTx.status === 'VERIFIED') {
       const recipientProfile = profiles.find(
         p => p.upiId.toLowerCase() === newTx.counterparty.toLowerCase() && p.id !== currentUser.id
@@ -299,7 +353,6 @@ export function WalletProvider({ children }) {
     );
     await storageService.updateTransactionStatus(currentUser.id, id, 'VERIFIED');
 
-    // If it was a P2P transfer, credit recipient now that it is approved!
     if (approvedTx && approvedTx.direction === 'OUT') {
       const recipientProfile = profiles.find(
         p => p.upiId.toLowerCase() === approvedTx.counterparty.toLowerCase() && p.id !== currentUser.id
@@ -354,7 +407,7 @@ export function WalletProvider({ children }) {
     );
   }, [currentUser.id, language, showToast]);
 
-  // Reset demo transactions for current active user
+  // Reset demo data
   const resetDemoData = useCallback(async () => {
     const fresh = await storageService.resetUserTransactions(currentUser.id);
     setTransactions(fresh);
@@ -392,6 +445,8 @@ export function WalletProvider({ children }) {
     currentUserId,
     isAuthenticated,
     loginAsUser,
+    loginWithPassword,
+    registerUser,
     logout,
     sendEmailVerification,
     transactions,

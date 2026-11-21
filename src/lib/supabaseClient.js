@@ -27,6 +27,7 @@ export const DEFAULT_PROFILES = [
     accountLast4: '4821',
     startingBalance: 25000,
     avatarInitials: 'N',
+    password: '1234',
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString()
   },
   {
@@ -39,6 +40,7 @@ export const DEFAULT_PROFILES = [
     accountLast4: '9480',
     startingBalance: 18500,
     avatarInitials: 'A',
+    password: '1234',
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString()
   }
 ];
@@ -222,9 +224,9 @@ export const DEFAULT_USER_TRANSACTIONS = {
   ]
 };
 
-const PROFILES_STORAGE_KEY = 'money_matters_profiles_v2';
-const TRANSACTIONS_STORAGE_KEY = 'money_matters_tx_v2';
-const ACTIVE_USER_KEY = 'money_matters_active_user_v2';
+const PROFILES_STORAGE_KEY = 'money_matters_profiles_v3';
+const TRANSACTIONS_STORAGE_KEY = 'money_matters_tx_v3';
+const ACTIVE_USER_KEY = 'money_matters_active_user_v3';
 
 export const storageService = {
   isCloudConnected() {
@@ -240,12 +242,12 @@ export const storageService = {
   },
 
   async loadProfiles() {
-    // 1. Try Supabase
+    let cloudProfiles = [];
     if (this.isCloudConnected() && supabase) {
       try {
         const { data, error } = await supabase.from('profiles').select('*');
         if (!error && Array.isArray(data) && data.length > 0) {
-          const mapped = data.map(p => ({
+          cloudProfiles = data.map(p => ({
             id: p.id,
             fullName: p.full_name,
             email: p.email,
@@ -255,28 +257,98 @@ export const storageService = {
             accountLast4: p.account_last4,
             startingBalance: Number(p.starting_balance),
             avatarInitials: p.avatar_initials,
+            password: p.password || '1234',
             createdAt: p.created_at
           }));
-          localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(mapped));
-          return mapped;
         }
       } catch (err) {
         console.warn('[MoneyMatters] Profiles fetch from Supabase failed:', err);
       }
     }
 
-    // 2. Try localStorage
+    // Merge with LocalStorage to preserve any newly created users
     try {
       const local = localStorage.getItem(PROFILES_STORAGE_KEY);
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
+      const localList = local ? JSON.parse(local) : [];
+      const combinedMap = new Map();
 
-    // 3. Fallback to default profiles
-    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(DEFAULT_PROFILES));
-    return DEFAULT_PROFILES;
+      // Priority 1: Default benchmark profiles
+      DEFAULT_PROFILES.forEach(p => combinedMap.set(p.id, p));
+      // Priority 2: Cloud profiles
+      cloudProfiles.forEach(p => combinedMap.set(p.id, p));
+      // Priority 3: Newly registered local profiles
+      localList.forEach(p => combinedMap.set(p.id, p));
+
+      const merged = Array.from(combinedMap.values());
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(merged));
+      return merged;
+    } catch {
+      return DEFAULT_PROFILES;
+    }
+  },
+
+  async createProfile(newProfile) {
+    const profiles = await this.loadProfiles();
+    const updated = [...profiles, newProfile];
+    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updated));
+
+    // Initialize initial welcome transaction for the new user
+    const welcomeTx = {
+      id: `tx_welcome_${Date.now()}`,
+      userId: newProfile.id,
+      direction: 'IN',
+      amount: newProfile.startingBalance,
+      counterparty: 'reserve.sandbox@fintech',
+      category: 'Salary',
+      message: 'Demo Sandbox Initial Account Setup Credit',
+      riskScore: 0,
+      riskLevel: 'SAFE',
+      status: 'VERIFIED',
+      reasons: ['Initial demo sandbox balance allocation.'],
+      reasonsKn: ['ಖಾತೆ ತೆರೆದ ಆರಂಭಿಕ ಡೆಮೊ ಹಣ ಜಮೆ.'],
+      isCollectRequest: false,
+      createdAt: new Date().toISOString()
+    };
+    this.saveLocalUserTransactions(newProfile.id, [welcomeTx]);
+
+    // Sync to Supabase in background if available
+    if (this.isCloudConnected() && supabase) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: newProfile.id,
+          full_name: newProfile.fullName,
+          email: newProfile.email,
+          upi_id: newProfile.upiId,
+          phone: newProfile.phone,
+          bank_name: newProfile.bankName,
+          account_last4: newProfile.accountLast4,
+          starting_balance: newProfile.startingBalance,
+          avatar_initials: newProfile.avatarInitials,
+          password: newProfile.password,
+          created_at: newProfile.createdAt
+        });
+
+        await supabase.from('transactions').upsert({
+          id: welcomeTx.id,
+          user_id: welcomeTx.userId,
+          direction: welcomeTx.direction,
+          amount: welcomeTx.amount,
+          counterparty: welcomeTx.counterparty,
+          category: welcomeTx.category,
+          message: welcomeTx.message,
+          risk_score: welcomeTx.riskScore,
+          risk_level: welcomeTx.riskLevel,
+          status: welcomeTx.status,
+          reasons: welcomeTx.reasons,
+          is_collect_request: false,
+          created_at: welcomeTx.createdAt
+        });
+      } catch (err) {
+        console.warn('[MoneyMatters] Supabase profile sync deferred:', err);
+      }
+    }
+
+    return newProfile;
   },
 
   async loadUserTransactions(userId) {
@@ -328,12 +400,10 @@ export const storageService = {
 
   async saveNewTransaction(tx) {
     const userId = tx.userId;
-    // 1. LocalStorage
     const current = this.getLocalUserTransactions(userId);
     const updated = [tx, ...current.filter(t => t.id !== tx.id)];
     this.saveLocalUserTransactions(userId, updated);
 
-    // 2. Supabase
     if (this.isCloudConnected() && supabase) {
       try {
         await supabase.from('transactions').upsert({
@@ -359,14 +429,12 @@ export const storageService = {
   },
 
   async updateTransactionStatus(userId, id, newStatus) {
-    // 1. LocalStorage
     const current = this.getLocalUserTransactions(userId);
     const updated = current.map(item => 
       item.id === id ? { ...item, status: newStatus, updatedAt: new Date().toISOString() } : item
     );
     this.saveLocalUserTransactions(userId, updated);
 
-    // 2. Supabase
     if (this.isCloudConnected() && supabase) {
       try {
         await supabase
