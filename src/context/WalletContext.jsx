@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import emailjs from '@emailjs/browser';
 import { 
   storageService, 
   DEFAULT_PROFILES, 
@@ -6,6 +7,10 @@ import {
   isSupabaseConfigured,
   findMatchingProfile
 } from '../lib/supabaseClient';
+
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_hw83brg';
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_ns3uw2o';
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'R1EEOpDBHLYui4x5e';
 import { scoreTransaction } from '../utils/fraudEngine';
 import { translations } from '../utils/translations';
 import { 
@@ -326,6 +331,120 @@ export function WalletProvider({ children }) {
     }
   }, [profiles, loginAsUser, showToast, language]);
 
+  // Register Verified User via EmailJS OTP directly into Supabase public.profiles and localStorage
+  const registerVerifiedUser = useCallback(async ({ fullName, email, pin }) => {
+    try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanFullName = (fullName || '').trim();
+      const cleanPin = (pin || '0000').trim() || '0000';
+      const cleanPrefix = cleanEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'user';
+      const wallet_id = `${cleanPrefix}@mmwallet`;
+      const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `usr_${Date.now()}`;
+      const initials = (cleanFullName[0] || 'U').toUpperCase();
+
+      const profilePayload = {
+        id,
+        full_name: cleanFullName,
+        email: cleanEmail,
+        wallet_id,
+        starting_balance: 5000,
+        demo_pin: cleanPin,
+        avatar_initials: initials
+      };
+
+      // 1. Direct upsert into Supabase public.profiles (onConflict: 'email')
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .upsert(profilePayload, { onConflict: 'email' })
+            .select();
+
+          if (error) {
+            console.error('[MoneyMatters] Supabase public.profiles upsert error:', error);
+          } else {
+            console.log('[MoneyMatters] Supabase public.profiles upserted successfully:', data);
+          }
+        } catch (supabaseErr) {
+          console.error('[MoneyMatters] Supabase public.profiles exception:', supabaseErr);
+        }
+      }
+
+      // 2. Full local profile object for the app
+      const fullProfile = {
+        id,
+        fullName: cleanFullName,
+        full_name: cleanFullName,
+        email: cleanEmail,
+        walletId: wallet_id,
+        wallet_id,
+        upiId: wallet_id,
+        phone: '+91 98765 00000',
+        bankName: 'Safe-Wallet Vault',
+        accountLast4: '8800',
+        startingBalance: 5000,
+        avatarInitials: initials,
+        password: cleanPin,
+        demoPin: cleanPin,
+        demo_pin: cleanPin,
+        createdAt: new Date().toISOString()
+      };
+
+      // 3. Save to localStorage
+      try {
+        const local = JSON.parse(localStorage.getItem('money_matters_profiles_v3') || '[]');
+        const filtered = local.filter(p => p.email?.toLowerCase() !== cleanEmail);
+        const updatedLocal = [...filtered, fullProfile];
+        localStorage.setItem('money_matters_profiles_v3', JSON.stringify(updatedLocal));
+      } catch (e) {
+        console.warn('[registerVerifiedUser] localStorage write error:', e);
+      }
+
+      // 4. Update React profiles state
+      setProfiles(prev => {
+        const filtered = prev.filter(p => p.email?.toLowerCase() !== cleanEmail);
+        return [...filtered, fullProfile];
+      });
+
+      // 5. Initial welcome transaction
+      const welcomeTx = {
+        id: `tx_welcome_${Date.now()}`,
+        txId: `tx_welcome_${Date.now()}`,
+        userId: id,
+        direction: 'IN',
+        amount: 5000,
+        counterparty: 'Safe-Wallet Primary Vault',
+        counterpartyWalletId: 'vault@mmwallet',
+        category: 'Salary',
+        txCategory: 'TOPUP',
+        message: 'Activated Safe-Wallet Initial Allocation',
+        riskScore: 0,
+        riskLevel: 'SAFE',
+        status: 'VERIFIED',
+        reasons: ['Initial wallet activation balance.'],
+        reasonsKn: ['ಖಾತೆ ತೆರೆದ ಆರಂಭಿಕ ಹಣ ಜಮೆ.'],
+        isCollectRequest: false,
+        isOfflineQueued: false,
+        createdAt: new Date().toISOString()
+      };
+      storageService.saveLocalUserTransactions(id, [welcomeTx]);
+
+      // 6. Log the user straight into their new Money Matters Wallet
+      loginAsUser(id);
+      showToast(
+        language === 'kn'
+          ? `ಸ್ವಾಗತ ${cleanFullName}! ನಿಮ್ಮ ವಾಲೆಟ್ ₹5,000 ಬ್ಯಾಲೆನ್ಸ್‌ನೊಂದಿಗೆ ಸಕ್ರಿಯಗೊಂಡಿದೆ.`
+          : `Welcome ${cleanFullName}! Wallet activated with ₹5,000 balance.`,
+        'success'
+      );
+
+      return { success: true, profile: fullProfile };
+    } catch (err) {
+      console.error('[MoneyMatters] registerVerifiedUser failed:', err);
+      return { success: false, error: err?.message || 'Failed to activate wallet.' };
+    }
+  }, [loginAsUser, showToast, language]);
+
   const [activeOtpSession, setActiveOtpSession] = useState(() => {
     try {
       const saved = localStorage.getItem('mm_active_otp_session');
@@ -424,30 +543,29 @@ export function WalletProvider({ children }) {
       localStorage.setItem('mm_active_otp_session', JSON.stringify(newSession));
     } catch {}
 
-    // Dispatch REAL LIVE verification email via Supabase Auth
+    // Dispatch REAL LIVE verification email via EmailJS (eliminates Supabase SMTP errors)
     let liveEmailSent = false;
     let liveError = null;
 
-    if (isSupabaseConfigured && supabase && matched.email) {
-      try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: matched.email.trim(),
-          options: {
-            emailRedirectTo: window.location.origin,
-            shouldCreateUser: true
-          }
-        });
-        if (!error) {
-          liveEmailSent = true;
-          console.log('[MoneyMatters] Live verification email dispatched via Supabase Custom SMTP to:', matched.email);
-        } else {
-          liveError = error.message;
-          console.warn('[MoneyMatters] Supabase signInWithOtp note:', error.message);
-        }
-      } catch (err) {
-        liveError = err?.message || String(err);
-        console.warn('[MoneyMatters] Supabase signInWithOtp exception:', err);
-      }
+    try {
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          to_email: matched.email.trim(),
+          to_name: matched.fullName || 'Valued User',
+          otp_code: generatedOtp,
+          code: generatedOtp,
+          otp: generatedOtp,
+          email: matched.email.trim()
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+      liveEmailSent = true;
+      console.log('[MoneyMatters] Live verification email dispatched via EmailJS to:', matched.email);
+    } catch (err) {
+      liveError = err?.text || err?.message || String(err);
+      console.warn('[MoneyMatters] EmailJS dispatch note:', err);
     }
 
     if (liveEmailSent) {
@@ -1041,6 +1159,7 @@ export function WalletProvider({ children }) {
     loginAsUser,
     loginWithPassword,
     registerUser,
+    registerVerifiedUser,
     logout,
     sendEmailVerification,
     verifyEmailOtp,
