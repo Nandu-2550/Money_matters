@@ -41,7 +41,8 @@ export default function ScannerSimulator() {
     topUpWallet,
     claimOfflineVoucher,
     isTopUpModalOpen,
-    setIsTopUpModalOpen
+    setIsTopUpModalOpen,
+    showToast
   } = useWallet();
 
   // Form State
@@ -89,8 +90,8 @@ export default function ScannerSimulator() {
         inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         inputEl.focus();
       }
-    }, 50);
-    showToast(
+    }, 100);
+    showToast?.(
       language === 'kn'
         ? 'ಮೊಬೈಲ್ ಅಥವಾ UPI ID ನಮೂದಿಸಿ ಹಣ ಕಳುಹಿಸಿ'
         : 'Enter Mobile Number or UPI ID to send money',
@@ -112,16 +113,21 @@ export default function ScannerSimulator() {
   // Select contact from horizontal bar
   const handleSelectContact = (contact) => {
     setDirection('OUT');
-    setCounterparty(contact.upiId);
+    setCounterparty(contact.upiId || contact.walletId);
     setCategory('Transfer');
     setMessage(`Transfer to ${contact.fullName}`);
     setIsCollectRequest(false);
     setScanResult(null);
     setFormError('');
+    setTimeout(() => {
+      const amtEl = document.getElementById('transfer-amount-input');
+      if (amtEl) amtEl.focus();
+    }, 100);
   };
 
   // QR Scan successful callback
   const handleQRScanSuccess = ({ upiId, payeeName, amount: qrAmount }) => {
+    setShowQRScanner(false);
     setDirection('OUT');
     setCounterparty(upiId);
     if (qrAmount) {
@@ -132,6 +138,25 @@ export default function ScannerSimulator() {
     setIsCollectRequest(false);
     setScanResult(null);
     setFormError('');
+
+    // Smoothly scroll down to the payment form and focus input
+    setTimeout(() => {
+      const formEl = document.getElementById('payment-form-container');
+      if (formEl) {
+        formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (!qrAmount) {
+        const amtEl = document.getElementById('transfer-amount-input');
+        if (amtEl) amtEl.focus();
+      }
+    }, 150);
+
+    showToast?.(
+      language === 'kn'
+        ? `QR ಸ್ಕ್ಯಾನ್ ಯಶಸ್ವಿಯಾಗಿದೆ: ${payeeName || upiId}`
+        : `QR scanned: ${payeeName || upiId}. Enter amount & PIN to pay.`,
+      'success'
+    );
   };
 
   // Quick Scenarios
@@ -188,48 +213,46 @@ export default function ScannerSimulator() {
 
     const parsedAmount = Number(amount);
     if (!counterparty.trim() || !parsedAmount || parsedAmount <= 0) {
-      setFormError(t.scanner.validationError);
+      setFormError(t.scanner.validationError || 'Please enter recipient UPI ID / Phone and valid amount');
       return;
-    }
-
-    // Closed-loop verification for OUT transfers
-    if (direction === 'OUT') {
-      const cleanUpi = counterparty.trim().toLowerCase();
-      const cleanDigits = cleanUpi.replace(/\D/g, '');
-      const sebiRegex = /^[a-zA-Z0-9._-]+\.(brk|mf|dp|pms|ra|ia)@valid[a-zA-Z]+$/i;
-      const isRegistered = profiles.some(p => {
-        const pUpi = (p.upiId || '').toLowerCase();
-        const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
-        const pEmail = (p.email || '').toLowerCase();
-        const pPhone = (p.phone || '').replace(/\D/g, '');
-        if (pUpi === cleanUpi || pWallet === cleanUpi || pEmail === cleanUpi) return true;
-        if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
-        return false;
-      });
-      const isValidSebi = sebiRegex.test(cleanUpi);
-      const isPreset = cleanUpi.includes('store') || cleanUpi.includes('vip') || cleanUpi.includes('buyer') || cleanUpi.includes('zerodha') || cleanUpi.includes('bescom');
-
-      if (!isRegistered && !isValidSebi && !isPreset) {
-        setFormError(
-          t.scanner.closedLoopError ||
-          'Recipient is not registered on Money Matters. Closed-loop transfers require a registered user, mobile number, or verified SEBI handle.'
-        );
-        return;
-      }
-
-      // Check balance
-      if (parsedAmount > computedMetrics.currentBalance) {
-        setFormError(
-          language === 'kn'
-            ? `ಅಪರ್ಯಾಪ್ತ ಬ್ಯಾಲೆನ್ಸ್! ನಿಮ್ಮ ಲಭ್ಯವಿರುವ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್ ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
-            : `Insufficient balance! Your available wallet balance is ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
-        );
-        return;
-      }
     }
 
     const cleanUpi = counterparty.trim().toLowerCase();
     const cleanDigits = cleanUpi.replace(/\D/g, '');
+
+    // Allow standard UPI format (@), 10-digit mobile, registered profile, or presets
+    const isProfileMatch = profiles.some(p => {
+      const pUpi = (p.upiId || '').toLowerCase();
+      const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
+      const pEmail = (p.email || '').toLowerCase();
+      const pPhone = (p.phone || '').replace(/\D/g, '');
+      if (pUpi === cleanUpi || pWallet === cleanUpi || pEmail === cleanUpi) return true;
+      if (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10))) return true;
+      return false;
+    });
+
+    const isFormatValid = cleanUpi.includes('@') || cleanDigits.length === 10 || isProfileMatch || cleanUpi.length > 2;
+    if (!isFormatValid) {
+      setFormError(
+        language === 'kn'
+          ? 'ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ UPI ID (ಉದಾ: name@upi) ಅಥವಾ 10-ಅಂಕಿಗಳ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ನಮೂದಿಸಿ.'
+          : 'Please enter a valid UPI ID (e.g. name@upi) or 10-digit mobile number.'
+      );
+      return;
+    }
+
+    // Check balance for OUT transfers
+    if (direction === 'OUT') {
+      if (parsedAmount > computedMetrics.currentBalance) {
+        setFormError(
+          language === 'kn'
+            ? `ಅಪರ್ಯಾಪ್ತ ಬ್ಯಾಲೆನ್ಸ್! ನಿಮ್ಮ ಲಭ್ಯವಿರುವ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್ ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}. ದಯವಿಟ್ಟು "ಹಣ ಸೇರಿಸಿ" ಕ್ಲಿಕ್ ಮಾಡಿ.`
+            : `Insufficient balance! Your available wallet balance is ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}. Please click "Add Money" to top up.`
+        );
+        return;
+      }
+    }
+
     const recipient = profiles.find(p => {
       const pUpi = (p.upiId || '').toLowerCase();
       const pWallet = (p.walletId || p.wallet_id || '').toLowerCase();
@@ -546,7 +569,7 @@ export default function ScannerSimulator() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Form Container */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+        <div id="payment-form-container" className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
           <form onSubmit={handleInitiatePayment} className="space-y-4">
             
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -607,6 +630,7 @@ export default function ScannerSimulator() {
                 <div className="relative">
                   <span className="absolute left-3.5 top-2.5 text-slate-400 text-sm font-semibold">₹</span>
                   <input
+                    id="transfer-amount-input"
                     type="number"
                     min="1"
                     step="any"

@@ -676,17 +676,17 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                   </div>
                 )}
 
-                {/* Section B: Standard User Wallet QR Cards */}
+                {/* Section B: Standard User Wallet QR Cards & Real Scenarios */}
                 <div className="text-xs text-slate-400 pt-1">
                   {language === 'kn'
-                    ? 'ನೇರ ಹಣ ವರ್ಗಾವಣೆಗಾಗಿ ಬಳಕೆದಾರರ ವಾಲೆಟ್ QR ಕಾರ್ಡ್ ಕ್ಲಿಕ್ ಮಾಡಿ:'
-                    : 'Click any registered Safe-Wallet QR to simulate a payment scan:'}
+                    ? 'ತ್ವರಿತ ಪರೀಕ್ಷೆಗಾಗಿ ಕೆಳಗಿನ ಯಾವುದೇ QR ಕಾರ್ಡ್ ಕ್ಲಿಕ್ ಮಾಡಿ:'
+                    : 'Click any test QR card below to simulate an instant scan:'}
                 </div>
 
                 <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                   {otherUsers.map((user) => {
                     const handle = user.walletId || user.upiId;
-                    const walletUri = `mmwallet://pay?pa=${handle}&pn=${encodeURIComponent(user.fullName)}&cu=INR`;
+                    const walletUri = `upi://pay?pa=${handle}&pn=${encodeURIComponent(user.fullName)}&cu=INR`;
                     return (
                       <div
                         key={user.id}
@@ -711,7 +711,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                             </span>
                             <span className="text-[10px] text-slate-400 flex items-center gap-1">
                               <Landmark className="w-2.5 h-2.5" />
-                              Safe Wallet • Closed-Loop
+                              Safe Wallet • Peer-to-Peer
                             </span>
                           </div>
                         </div>
@@ -726,6 +726,74 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
                       </div>
                     );
                   })}
+
+                  {/* Merchant Store QR */}
+                  <div
+                    onClick={() => handlePayloadResult('upi://pay?pa=ravi.store@okicici&pn=Ravi%20General%20Store&am=250&cu=INR')}
+                    className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white p-1 rounded-xl shrink-0 shadow-sm">
+                        <QRCodeCanvas
+                          value="upi://pay?pa=ravi.store@okicici&pn=Ravi%20General%20Store&am=250&cu=INR"
+                          size={44}
+                          level="M"
+                        />
+                      </div>
+                      <div className="truncate">
+                        <h4 className="text-xs font-bold text-white group-hover:text-emerald-400 transition truncate">
+                          Ravi General Store (₹250)
+                        </h4>
+                        <span className="text-[11px] font-mono text-slate-400 block truncate">
+                          ravi.store@okicici
+                        </span>
+                        <span className="text-[10px] text-emerald-400">
+                          Verified Local Merchant • Preset ₹250
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold group-hover:bg-emerald-500 group-hover:text-slate-950 transition shrink-0 flex items-center gap-1"
+                    >
+                      <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್' : 'Scan'}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* SEBI Broker QR */}
+                  <div
+                    onClick={() => handlePayloadResult('upi://pay?pa=zerodha.brk@validhdfc&pn=Zerodha%20Broking&am=2000&cu=INR')}
+                    className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white p-1 rounded-xl shrink-0 shadow-sm">
+                        <QRCodeCanvas
+                          value="upi://pay?pa=zerodha.brk@validhdfc&pn=Zerodha%20Broking&am=2000&cu=INR"
+                          size={44}
+                          level="M"
+                        />
+                      </div>
+                      <div className="truncate">
+                        <h4 className="text-xs font-bold text-white group-hover:text-blue-400 transition truncate">
+                          Zerodha Nifty SIP (₹2,000)
+                        </h4>
+                        <span className="text-[11px] font-mono text-slate-400 block truncate">
+                          zerodha.brk@validhdfc
+                        </span>
+                        <span className="text-[10px] text-blue-400">
+                          SEBI Regulated Protocol • @valid
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold group-hover:bg-blue-500 group-hover:text-slate-950 transition shrink-0 flex items-center gap-1"
+                    >
+                      <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್' : 'Scan'}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

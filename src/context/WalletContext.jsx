@@ -789,6 +789,7 @@ export function WalletProvider({ children }) {
     isInstalled,
     promptInstall,
     notification,
+    showToast,
     computedMetrics,
     submitTransaction,
     topUpWallet,

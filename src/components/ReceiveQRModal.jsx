@@ -16,12 +16,16 @@ import { useWallet } from '../context/WalletContext';
 export default function ReceiveQRModal({ isOpen, onClose }) {
   const { currentUser, computedMetrics, language } = useWallet();
   const [copied, setCopied] = useState(false);
+  const [requestedAmount, setRequestedAmount] = useState('');
   const qrRef = useRef(null);
 
   if (!isOpen || !currentUser) return null;
 
   const activeWalletId = currentUser.walletId || currentUser.wallet_id || currentUser.upiId;
-  const walletUri = `mmwallet://pay?pa=${activeWalletId}&pn=${encodeURIComponent(currentUser.fullName)}&cu=INR`;
+  const numAmount = Number(requestedAmount);
+  const walletUri = numAmount > 0
+    ? `upi://pay?pa=${activeWalletId}&pn=${encodeURIComponent(currentUser.fullName)}&am=${numAmount}&cu=INR`
+    : `upi://pay?pa=${activeWalletId}&pn=${encodeURIComponent(currentUser.fullName)}&cu=INR`;
 
   const copyWalletId = () => {
     navigator.clipboard.writeText(activeWalletId);
@@ -87,7 +91,7 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
         <div className="bg-white p-4 rounded-3xl shadow-lg flex flex-col items-center justify-center mx-auto w-fit" ref={qrRef}>
           <QRCodeCanvas
             value={walletUri}
-            size={210}
+            size={190}
             level="H"
             includeMargin={true}
           />
@@ -95,6 +99,57 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
             <span className="text-[10px] text-slate-700 font-mono font-bold tracking-tight">
               {activeWalletId}
             </span>
+            {numAmount > 0 && (
+              <span className="block text-xs font-bold text-emerald-700 font-mono mt-0.5">
+                Requesting ₹{numAmount.toLocaleString('en-IN')}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Set Specific Amount (Generates Dynamic QR) */}
+        <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-300">
+              {language === 'kn' ? 'ನಿರ್ದಿಷ್ಟ ಮೊತ್ತ ವಿನಂತಿಸಿ (ಐಚ್ಛಿಕ)' : 'Request Specific Amount (Optional)'}
+            </span>
+            {requestedAmount && (
+              <button
+                type="button"
+                onClick={() => setRequestedAmount('')}
+                className="text-[10px] text-slate-500 hover:text-slate-300 underline"
+              >
+                {language === 'kn' ? 'ತೆರವುಗೊಳಿಸಿ' : 'Clear'}
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-2 text-slate-500 text-xs font-bold">₹</span>
+            <input
+              type="number"
+              min="1"
+              max="50000"
+              placeholder="e.g. 500 (QR updates dynamically)"
+              value={requestedAmount}
+              onChange={(e) => setRequestedAmount(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-7 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-slate-700 font-semibold"
+            />
+          </div>
+          <div className="flex gap-1.5">
+            {[100, 250, 500, 1000, 2000].map(amt => (
+              <button
+                key={amt}
+                type="button"
+                onClick={() => setRequestedAmount(String(amt))}
+                className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition ${
+                  requestedAmount === String(amt)
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                ₹{amt}
+              </button>
+            ))}
           </div>
         </div>
 
