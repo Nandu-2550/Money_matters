@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { 
   ShieldCheck, 
   ShieldAlert, 
-  ShieldX, 
   ArrowDownLeft, 
   ArrowUpRight, 
-  Sparkles, 
   AlertCircle, 
   CheckCircle2, 
   ArrowRight,
   HelpCircle,
-  Zap,
-  Info
+  Store,
+  Smartphone,
+  TrendingUp,
+  Landmark,
+  ExternalLink
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
@@ -28,14 +29,13 @@ export default function ScannerSimulator() {
   const [isScanning, setIsScanning] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // 1-Click Judge Demo Presets
+  // Quick Scenarios (Clean & Realistic)
   const handleApplyPreset = (presetNumber) => {
     setFormError('');
     setScanResult(null);
 
     switch (presetNumber) {
       case 1:
-        // Safe Customer Inflow (₹1,200 from ravi.store@okicici)
         setDirection('IN');
         setCounterparty('ravi.store@okicici');
         setAmount('1200');
@@ -45,7 +45,6 @@ export default function ScannerSimulator() {
         break;
 
       case 2:
-        // Fake Collect-Request Trap (₹8,500 asking PIN to receive)
         setDirection('IN');
         setCounterparty('olx.buyer99@paytm');
         setAmount('8500');
@@ -55,7 +54,6 @@ export default function ScannerSimulator() {
         break;
 
       case 3:
-        // WhatsApp Fake Stock Group Scam (₹15,000 to vip.trades@okaxis)
         setDirection('OUT');
         setCounterparty('vip.trades@okaxis');
         setAmount('15000');
@@ -65,7 +63,6 @@ export default function ScannerSimulator() {
         break;
 
       case 4:
-        // Verified SEBI Broker SIP (₹2,500 to zerodha.brk@validhdfc)
         setDirection('OUT');
         setCounterparty('zerodha.brk@validhdfc');
         setAmount('2500');
@@ -92,7 +89,6 @@ export default function ScannerSimulator() {
     setIsScanning(true);
     setScanResult(null);
 
-    // Subtle realistic analysis delay for authentic fintech security scanning UX
     setTimeout(async () => {
       const result = await submitTransaction({
         direction,
@@ -104,31 +100,26 @@ export default function ScannerSimulator() {
       });
       setScanResult(result);
       setIsScanning(false);
-    }, 450);
+    }, 350);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       
-      {/* Title & Subtitle */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Top Header Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Zap className="w-5 h-5" />
-              </span>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                {t.scanner.title}
-              </h2>
-            </div>
-            <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+              {t.scanner.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
               {t.scanner.subtitle}
             </p>
           </div>
 
-          {/* Direction Toggle Pills */}
-          <div className="flex bg-slate-950 p-1.5 rounded-xl border border-slate-800 shrink-0">
+          {/* Direction Pill Selector */}
+          <div className="inline-flex bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 self-start sm:self-auto">
             <button
               type="button"
               onClick={() => {
@@ -136,13 +127,13 @@ export default function ScannerSimulator() {
                 setIsCollectRequest(false);
                 setScanResult(null);
               }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                 direction === 'OUT'
-                  ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <ArrowUpRight className="w-4 h-4" />
+              <ArrowUpRight className="w-3.5 h-3.5 text-rose-400" />
               <span>{t.scanner.outgoingTab}</span>
             </button>
 
@@ -152,104 +143,90 @@ export default function ScannerSimulator() {
                 setDirection('IN');
                 setScanResult(null);
               }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                 direction === 'IN'
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <ArrowDownLeft className="w-4 h-4" />
+              <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />
               <span>{t.scanner.incomingTab}</span>
             </button>
           </div>
         </div>
 
-        {/* 1-Click Judge Demo Presets Section */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs uppercase tracking-wider font-extrabold text-emerald-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              {t.scanner.presetsTitle}
-            </span>
-            <span className="text-[11px] text-slate-400">
-              {language === 'kn' ? 'ತಕ್ಷಣ ಪರೀಕ್ಷಿಸಲು ಕ್ಲಿಕ್ ಮಾಡಿ' : 'Click to auto-populate test cases'}
-            </span>
+        {/* Quick Test Scenarios Cards */}
+        <div className="mt-5 pt-4 border-t border-slate-800/80">
+          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
+            {t.scanner.presetsTitle}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             
-            {/* Preset 1: Safe Inflow */}
+            {/* Preset 1 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(1)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-emerald-500/40 transition group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-400 group-hover:text-emerald-300">
+              <div className="flex items-center gap-2 mb-1">
+                <Store className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
                   {t.scanner.preset1}
                 </span>
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  {t.riskLevels.SAFE}
-                </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+              <p className="text-[11px] text-slate-400 line-clamp-1">
                 {t.scanner.preset1Desc}
               </p>
             </button>
 
-            {/* Preset 2: Fake Collect Trap */}
+            {/* Preset 2 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(2)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-rose-500/40 transition group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-rose-400 group-hover:text-rose-300">
+              <div className="flex items-center gap-2 mb-1">
+                <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
                   {t.scanner.preset2}
                 </span>
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                  {t.riskLevels.HIGH_RISK}
-                </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+              <p className="text-[11px] text-slate-400 line-clamp-1">
                 {t.scanner.preset2Desc}
               </p>
             </button>
 
-            {/* Preset 3: Fake WhatsApp Scam */}
+            {/* Preset 3 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(3)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-rose-500/40 transition group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-rose-400 group-hover:text-rose-300">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
                   {t.scanner.preset3}
                 </span>
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                  {t.riskLevels.HIGH_RISK}
-                </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+              <p className="text-[11px] text-slate-400 line-clamp-1">
                 {t.scanner.preset3Desc}
               </p>
             </button>
 
-            {/* Preset 4: Regulated SEBI SIP */}
+            {/* Preset 4 */}
             <button
               type="button"
               onClick={() => handleApplyPreset(4)}
-              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-emerald-500/40 transition group"
+              className="text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800/70 border border-slate-800/90 transition text-xs group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-400 group-hover:text-emerald-300">
+              <div className="flex items-center gap-2 mb-1">
+                <Landmark className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-slate-200 group-hover:text-white truncate">
                   {t.scanner.preset4}
                 </span>
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  {t.riskLevels.SAFE}
-                </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+              <p className="text-[11px] text-slate-400 line-clamp-1">
                 {t.scanner.preset4Desc}
               </p>
             </button>
@@ -257,64 +234,59 @@ export default function ScannerSimulator() {
         </div>
       </div>
 
-      {/* Main Simulation Form & Live Risk Analysis Result Side-by-Side */}
+      {/* Main Form & Result Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left: Input Form */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl">
+        {/* Form Container */}
+        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
           <form onSubmit={handleRunScan} className="space-y-4">
             
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Info className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 {t.scanner.formTitle}
-              </h3>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                direction === 'OUT' ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'
-              }`}>
+              </span>
+              <span className="text-xs text-slate-400">
                 {direction === 'OUT' ? t.scanner.directionOut : t.scanner.directionIn}
               </span>
             </div>
 
             {formError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>{formError}</span>
               </div>
             )}
 
-            {/* Counterparty UPI ID */}
+            {/* UPI ID */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                {t.scanner.upiLabel} *
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                {t.scanner.upiLabel}
               </label>
               <input
                 type="text"
                 value={counterparty}
                 onChange={(e) => setCounterparty(e.target.value)}
                 placeholder={t.scanner.upiPlaceholder}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 transition outline-none font-mono"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition font-mono"
                 required
               />
-              <p className="text-[11px] text-slate-400 mt-1">
-                {direction === 'OUT' && (
-                  <span className="text-slate-400">
-                    {language === 'kn'
-                      ? 'ಸುರಕ್ಷಿತ ಹೂಡಿಕೆಗೆ SEBI ಹ್ಯಾಂಡಲ್ .brk@valid* ಅಥವಾ .mf@valid* ಬಳಸಿ.'
-                      : 'Tip: Regulated SEBI brokers use official .brk@valid* or .mf@valid* handles.'}
-                  </span>
-                )}
-              </p>
+              {direction === 'OUT' && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {language === 'kn'
+                    ? 'ಅಧಿಕೃತ SEBI ಹೂಡಿಕೆ ಬ್ರೋಕರ್‌ಗಳು .brk@valid* ಅಥವಾ .mf@valid* ಹ್ಯಾಂಡಲ್ ಬಳಸುತ್ತಾರೆ.'
+                    : 'Regulated SEBI brokers use official .brk@valid* or .mf@valid* handles.'}
+                </p>
+              )}
             </div>
 
             {/* Amount & Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  {t.scanner.amountLabel} *
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  {t.scanner.amountLabel}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-sm">₹</span>
+                  <span className="absolute left-3.5 top-2.5 text-slate-400 text-sm font-semibold">₹</span>
                   <input
                     type="number"
                     min="1"
@@ -322,20 +294,20 @@ export default function ScannerSimulator() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder={t.scanner.amountPlaceholder}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white placeholder-slate-500 transition outline-none font-semibold"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition font-semibold"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
                   {t.scanner.categoryLabel}
                 </label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 text-sm text-white transition outline-none"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3 py-2.5 text-sm text-white outline-none transition"
                 >
                   <option value="Investment">{t.categories.Investment}</option>
                   <option value="Retail">{t.categories.Retail}</option>
@@ -349,9 +321,9 @@ export default function ScannerSimulator() {
               </div>
             </div>
 
-            {/* Note / WhatsApp text / link */}
+            {/* Notes / Message */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 {t.scanner.messageLabel}
               </label>
               <textarea
@@ -359,25 +331,25 @@ export default function ScannerSimulator() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={t.scanner.messagePlaceholder}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 transition outline-none resize-none"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 outline-none transition resize-none"
               />
             </div>
 
-            {/* Incoming Mode Specific: Collect Request Trap Checkbox */}
+            {/* Incoming Mode: Collect Request Checkbox */}
             {direction === 'IN' && (
-              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <label className="flex items-start gap-3 cursor-pointer">
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <label className="flex items-start gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isCollectRequest}
                     onChange={(e) => setIsCollectRequest(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-amber-400 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900"
+                    className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-0"
                   />
                   <div>
-                    <span className="text-xs font-bold text-amber-300 block">
+                    <span className="text-xs font-medium text-slate-200 block">
                       {t.scanner.collectCheckbox}
                     </span>
-                    <span className="text-[11px] text-amber-400/80 block mt-0.5">
+                    <span className="text-[11px] text-slate-400 block mt-0.5">
                       {t.scanner.collectHelp}
                     </span>
                   </div>
@@ -385,11 +357,11 @@ export default function ScannerSimulator() {
               </div>
             )}
 
-            {/* Submit Scan Button */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isScanning}
-              className="w-full py-3 px-4 rounded-xl font-extrabold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-lg shadow-emerald-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-xl font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isScanning ? (
                 <>
@@ -398,7 +370,7 @@ export default function ScannerSimulator() {
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-5 h-5 text-slate-950" />
+                  <ShieldCheck className="w-4 h-4" />
                   <span>{t.scanner.scanBtn}</span>
                 </>
               )}
@@ -406,71 +378,45 @@ export default function ScannerSimulator() {
           </form>
         </div>
 
-        {/* Right: Instant Risk Analysis Result Card */}
+        {/* Right: Security Result Card */}
         <div className="lg:col-span-5 flex flex-col">
           {scanResult ? (
-            <div className={`h-full rounded-2xl p-5 sm:p-7 border shadow-xl flex flex-col justify-between transition-all duration-300 ${
+            <div className={`h-full rounded-2xl p-5 sm:p-6 border shadow-sm flex flex-col justify-between ${
               scanResult.status === 'HELD_FOR_REVIEW'
-                ? 'bg-gradient-to-b from-rose-950/40 via-slate-900 to-slate-950 border-rose-500/40'
-                : 'bg-gradient-to-b from-emerald-950/40 via-slate-900 to-slate-950 border-emerald-500/40'
+                ? 'bg-slate-900 border-amber-500/30'
+                : 'bg-slate-900 border-emerald-500/30'
             }`}>
               <div>
                 
-                {/* Result Header */}
+                {/* Result Top */}
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                   <div className="flex items-center gap-2">
                     {scanResult.status === 'HELD_FOR_REVIEW' ? (
-                      <ShieldAlert className="w-5 h-5 text-rose-400" />
+                      <ShieldAlert className="w-4 h-4 text-amber-400" />
                     ) : (
-                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
                     )}
-                    <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                       {t.scanner.riskCardTitle}
-                    </h3>
+                    </span>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                     scanResult.status === 'HELD_FOR_REVIEW'
-                      ? 'bg-rose-500 text-white animate-pulse'
-                      : 'bg-emerald-500 text-slate-950'
+                      ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                   }`}>
                     {t.statuses[scanResult.status] || scanResult.status}
                   </span>
                 </div>
 
-                {/* Risk Gauge & Score */}
-                <div className="flex items-center gap-4 bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 mb-4">
-                  <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                      <path
-                        className="text-slate-800"
-                        strokeWidth="3.5"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <path
-                        className={scanResult.riskScore >= 60 ? 'text-rose-500' : scanResult.riskScore >= 35 ? 'text-amber-400' : 'text-emerald-400'}
-                        strokeDasharray={`${scanResult.riskScore}, 100`}
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-base font-black text-white">{scanResult.riskScore}</span>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">/ 100</span>
-                    </div>
+                {/* Score & Evaluation */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 mb-4 flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-full bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shrink-0">
+                    <span className="text-base font-bold text-white leading-none">{scanResult.riskScore}</span>
+                    <span className="text-[9px] text-slate-500 font-medium">/ 100</span>
                   </div>
-
                   <div>
-                    <div className="text-[11px] uppercase font-bold text-slate-400">
-                      {t.scanner.riskScore}
-                    </div>
-                    <div className={`text-base font-black ${
-                      scanResult.riskScore >= 60 ? 'text-rose-400' : scanResult.riskScore >= 35 ? 'text-amber-400' : 'text-emerald-400'
-                    }`}>
+                    <div className="text-xs font-semibold text-slate-300">
                       {t.riskLevels[scanResult.riskLevel] || scanResult.riskLevel}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -479,26 +425,18 @@ export default function ScannerSimulator() {
                   </div>
                 </div>
 
-                {/* Bulleted Explainable Reasons */}
+                {/* Detected Details */}
                 <div className="space-y-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                     {t.scanner.reasonsTitle}
                   </div>
-                  <ul className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                     {(language === 'kn' && scanResult.reasonsKn?.length ? scanResult.reasonsKn : scanResult.reasons).map((reason, idx) => (
                       <li 
                         key={idx}
-                        className={`text-xs p-2.5 rounded-lg border flex items-start gap-2 ${
-                          scanResult.status === 'HELD_FOR_REVIEW'
-                            ? 'bg-rose-950/30 border-rose-500/20 text-rose-200'
-                            : 'bg-emerald-950/30 border-emerald-500/20 text-emerald-200'
-                        }`}
+                        className="text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 text-slate-300 flex items-start gap-2"
                       >
-                        {scanResult.status === 'HELD_FOR_REVIEW' ? (
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-400" />
-                        ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-400" />
-                        )}
+                        <span className="text-slate-500 font-bold">•</span>
                         <span className="leading-relaxed">{reason}</span>
                       </li>
                     ))}
@@ -506,50 +444,45 @@ export default function ScannerSimulator() {
                 </div>
               </div>
 
-              {/* Bottom Actions & Shortcuts */}
-              <div className="mt-5 pt-4 border-t border-slate-800">
+              {/* Bottom Actions */}
+              <div className="mt-5 pt-3 border-t border-slate-800">
                 {scanResult.status === 'HELD_FOR_REVIEW' ? (
                   <button
                     type="button"
                     onClick={() => setActiveTab('queue')}
-                    className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 transition cursor-pointer"
+                    className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
                     <span>{t.scanner.gotoQueue}</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setActiveTab('dashboard')}
-                    className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 flex items-center justify-center gap-2 transition cursor-pointer"
+                    className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
-                    <span>{language === 'kn' ? 'ನಗದು ಹರಿವಿನ ಲೆಡ್ಜರ್ ವೀಕ್ಷಿಸಿ' : 'View Reconciled Ledger'}</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <span>{language === 'kn' ? 'ಲೆಡ್ಜರ್ ವೀಕ್ಷಿಸಿ' : 'View Ledger'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
-                <p className="text-[10px] text-slate-400 text-center mt-2.5">
+                <p className="text-[10px] text-slate-500 text-center mt-2">
                   {t.disclaimerNotice}
                 </p>
               </div>
             </div>
           ) : (
-            <div className="h-full min-h-[300px] bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-slate-500 mb-3">
-                <ShieldCheck className="w-8 h-8 text-emerald-500/50" />
+            <div className="h-full min-h-[260px] bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+              <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
+                <ShieldCheck className="w-6 h-6 text-slate-400" />
               </div>
-              <h4 className="text-base font-bold text-white mb-1">
-                {language === 'kn' ? 'ಶೀಲ್ಡ್ ಸಿದ್ಧವಾಗಿದೆ' : 'Shield Scanner Ready'}
+              <h4 className="text-sm font-semibold text-slate-200 mb-1">
+                {language === 'kn' ? 'ಪಾವತಿ ಪರಿಶೀಲನೆ ಸಿದ್ಧವಾಗಿದೆ' : 'Ready to verify'}
               </h4>
-              <p className="text-xs text-slate-400 max-w-sm mb-4">
+              <p className="text-xs text-slate-400 max-w-xs">
                 {language === 'kn'
-                  ? 'ಮೇಲಿನ 1-ಕ್ಲಿಕ್ ತೀರ್ಪುಗಾರರ ಪ್ರಿಸೆಟ್‌ಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ ಅಥವಾ ನೇರವಾಗಿ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.'
-                  : 'Select any of the 4 Judge Demo Presets above or enter custom UPI details to test the deterministic risk scoring engine.'}
+                  ? 'ಮೇಲಿನ ಪರೀಕ್ಷಾ ಮಾದರಿಗಳನ್ನು ಬಳಸಿ ಅಥವಾ ಹೊಸ ಪಾವತಿ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ಪರಿಶೀಲಿಸಿ.'
+                  : 'Select a test scenario above or enter UPI payment details to verify safety.'}
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-400">
-                <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">✓ SEBI @valid Check</span>
-                <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">✓ Collect Request Guard</span>
-                <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">✓ Malware APK Detector</span>
-              </div>
             </div>
           )}
         </div>

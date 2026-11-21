@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, 
+  Clock, 
   ShieldAlert, 
   ShieldX, 
   CheckCircle2, 
@@ -8,11 +8,8 @@ import {
   VolumeX, 
   ArrowUpRight, 
   ArrowDownLeft, 
-  Clock, 
-  AlertTriangle, 
-  Lock,
   History,
-  Info
+  AlertTriangle
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
@@ -27,7 +24,6 @@ export default function ReviewQueue() {
 
   const [isSpeakingId, setIsSpeakingId] = useState(null);
 
-  // Clean up speech synthesis if component unmounts
   useEffect(() => {
     return () => {
       if ('speechSynthesis' in window) {
@@ -38,7 +34,7 @@ export default function ReviewQueue() {
 
   const handleSpeakWarning = (tx) => {
     if (!('speechSynthesis' in window)) {
-      alert('Speech synthesis is not supported on this browser.');
+      alert('Speech synthesis is not supported on this device.');
       return;
     }
 
@@ -50,20 +46,18 @@ export default function ReviewQueue() {
 
     window.speechSynthesis.cancel();
 
-    // Construct spoken text in English or Kannada
     let spokenText = '';
     const reasonsList = (language === 'kn' && tx.reasonsKn?.length ? tx.reasonsKn : tx.reasons).join('. ');
 
     if (language === 'kn') {
-      spokenText = `ಎಚ್ಚರಿಕೆ! ${tx.counterparty} ಗೆ ಸಂಬಂಧಿಸಿದ ${tx.amount} ರೂಪಾಯಿಗಳ ವಹಿವಾಟು ಹೆಚ್ಚಿನ ಅಪಾಯದ ಕಾರಣ ತಡೆಹಿಡಿಯಲಾಗಿದೆ. ಕಾರಣ: ${reasonsList}`;
+      spokenText = `ಎಚ್ಚರಿಕೆ! ${tx.counterparty} ಗೆ ಸಂಬಂಧಿಸಿದ ${tx.amount} ರೂಪಾಯಿಗಳ ಪಾವತಿಯನ್ನು ತಡೆಹಿಡಿಯಲಾಗಿದೆ. ಕಾರಣ: ${reasonsList}`;
     } else {
-      spokenText = `Warning! A transaction of rupees ${tx.amount} involving ${tx.counterparty} has been intercepted with a high risk score of ${tx.riskScore} out of 100. Reasons: ${reasonsList}`;
+      spokenText = `Notice. A transaction of ${tx.amount} rupees with ${tx.counterparty} has been held for review. Details: ${reasonsList}`;
     }
 
     const utterance = new SpeechSynthesisUtterance(spokenText);
     utterance.rate = 0.95;
 
-    // Pick appropriate voice if available
     const voices = window.speechSynthesis.getVoices();
     if (language === 'kn') {
       const knVoice = voices.find(v => v.lang.startsWith('kn') || v.lang.includes('IN'));
@@ -83,80 +77,64 @@ export default function ReviewQueue() {
   };
 
   const heldList = computedMetrics.heldTransactions;
-  const resolvedList = [...computedMetrics.blockedTransactions, ...computedMetrics.verifiedTransactions].slice(0, 10);
+  const resolvedList = [...computedMetrics.blockedTransactions, ...computedMetrics.verifiedTransactions].slice(0, 8);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       
-      {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl sm:text-2xl font-black text-white">
-                  {t.queue.title}
-                </h2>
-                {heldList.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-500 text-white animate-pulse">
-                    {heldList.length} {language === 'kn' ? 'ಬಾಕಿ' : 'HELD'}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-                {t.queue.subtitle}
-              </p>
-            </div>
+      {/* Top Overview Header */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+              {t.queue.title}
+            </h2>
+            {heldList.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                {heldList.length} {language === 'kn' ? 'ಬಾಕಿ' : 'pending'}
+              </span>
+            )}
           </div>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5 max-w-xl">
+            {t.queue.subtitle}
+          </p>
+        </div>
 
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 shrink-0 flex items-center gap-3">
-            <Lock className="w-5 h-5 text-emerald-400" />
-            <div className="text-xs">
-              <span className="text-slate-400 block font-medium">
-                {language === 'kn' ? 'ವಂಚನೆ ತಡೆ ಕವಚ:' : 'Funds Guard Status:'}
-              </span>
-              <span className="text-emerald-400 font-extrabold">
-                {language === 'kn' ? '100% ಸುರಕ್ಷಿತ ರಕ್ಷಣೆ' : 'Zero Loss Guarantee'}
-              </span>
-            </div>
-          </div>
+        <div className="text-left sm:text-right shrink-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
+            {language === 'kn' ? 'ಖಾತೆಯಲ್ಲಿ ಸುರಕ್ಷಿತವಾಗಿರುವ ಹಣ' : 'Funds Protected'}
+          </span>
+          <span className="text-sm font-bold text-emerald-400">
+            ₹{computedMetrics.totalSavedFromScams.toLocaleString('en-IN')}
+          </span>
         </div>
       </div>
 
-      {/* Active Held Transactions Section */}
-      <div className="space-y-4">
+      {/* Held Transactions List */}
+      <div className="space-y-3.5">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-rose-400" />
-            <span>{t.queue.activeAlerts}</span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-              {heldList.length}
-            </span>
-          </h3>
-          <span className="text-xs text-slate-400 hidden sm:inline">
-            {language === 'kn' ? 'ಖಾತೆಯಿಂದ ಹಣ ಕಡಿತಗೊಂಡಿಲ್ಲ' : 'Money has NOT moved from wallet'}
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            {t.queue.activeAlerts} ({heldList.length})
+          </span>
+          <span className="text-[11px] text-slate-400">
+            {language === 'kn' ? 'ಹಣ ಖಾತೆಯಿಂದ ಕಡಿತಗೊಂಡಿಲ್ಲ' : 'No funds have left your account'}
           </span>
         </div>
 
         {heldList.length === 0 ? (
-          /* Empty State */
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3 shadow-lg shadow-emerald-500/10">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-emerald-400 mb-3">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h4 className="text-lg font-bold text-white mb-1">
+            <h4 className="text-sm font-semibold text-white mb-1">
               {t.queue.emptyTitle}
             </h4>
-            <p className="text-sm text-slate-400 max-w-md">
+            <p className="text-xs text-slate-400 max-w-sm">
               {t.queue.emptyDesc}
             </p>
           </div>
         ) : (
-          /* List of Held Cards */
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-3.5">
             {heldList.map((tx) => {
               const isSpeaking = isSpeakingId === tx.id;
               const reasonsList = language === 'kn' && tx.reasonsKn?.length ? tx.reasonsKn : tx.reasons;
@@ -164,137 +142,119 @@ export default function ReviewQueue() {
               return (
                 <div 
                   key={tx.id}
-                  className="bg-slate-900 border-2 border-rose-500/40 hover:border-rose-500/70 rounded-2xl p-5 sm:p-6 shadow-xl transition space-y-4"
+                  className="bg-slate-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5"
                 >
-                  {/* Top Bar: Risk Tag, Direction, Amount, Time */}
+                  {/* Card Header: Amount, Counterparty, Risk Tag */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5">
-                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                        <span>{t.queue.riskBadge}: {tx.riskScore}/100</span>
-                      </span>
-
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${
+                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold flex items-center gap-1 ${
                         tx.direction === 'IN' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                       }`}>
-                        {tx.direction === 'IN' ? (
-                          <>
-                            <ArrowDownLeft className="w-3.5 h-3.5" />
-                            <span>{t.queue.directionInBadge}</span>
-                          </>
-                        ) : (
-                          <>
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                            <span>{t.queue.directionOutBadge}</span>
-                          </>
-                        )}
+                        {tx.direction === 'IN' ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                        <span>{tx.direction === 'IN' ? t.queue.directionInBadge : t.queue.directionOutBadge}</span>
                       </span>
 
-                      <span className="text-xs text-slate-400 px-2 py-0.5 rounded bg-slate-800">
+                      <span className="text-[11px] text-slate-400 px-2 py-0.5 rounded bg-slate-950 border border-slate-800">
                         {t.categories[tx.category] || tx.category}
+                      </span>
+
+                      <span className="text-[11px] font-semibold text-amber-300 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                        {t.queue.riskBadge}: {tx.riskScore}/100
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          {language === 'kn' ? 'ತಡೆಹಿಡಿದ ಮೊತ್ತ' : 'Held Amount'}
-                        </span>
-                        <span className="text-xl font-black text-white">
-                          ₹{Number(tx.amount).toLocaleString('en-IN')}
-                        </span>
-                      </div>
+                    <div className="text-right">
+                      <span className="text-base sm:text-lg font-bold text-white">
+                        ₹{Number(tx.amount).toLocaleString('en-IN')}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Transaction Metadata & Counterparty */}
-                  <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  {/* VPA & Note */}
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                     <div>
-                      <span className="text-[11px] font-bold uppercase text-slate-400 block">
-                        {tx.direction === 'IN' ? 'Sender UPI ID' : 'Target Recipient UPI ID'}
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">
+                        {tx.direction === 'IN' ? 'Sender UPI ID' : 'Recipient UPI ID'}
                       </span>
-                      <span className="text-sm font-mono font-bold text-emerald-300">
+                      <span className="font-mono text-slate-200 font-medium">
                         {tx.counterparty}
                       </span>
                     </div>
 
                     {tx.message && (
-                      <div className="sm:text-right max-w-md">
-                        <span className="text-[11px] font-bold uppercase text-slate-400 block">
-                          {language === 'kn' ? 'ಲಗತ್ತಿಸಲಾದ ಸಂದೇಶ / ವಿವರ' : 'Payment Remarks / Link'}
+                      <div className="sm:text-right max-w-sm">
+                        <span className="text-[10px] text-slate-400 uppercase font-medium block">
+                          {language === 'kn' ? 'ವಿವರ' : 'Description'}
                         </span>
-                        <span className="text-xs text-slate-300 italic line-clamp-2">
+                        <span className="text-slate-300 italic truncate block">
                           "{tx.message}"
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {/* Explanatory Reasons Bullet Points */}
-                  <div className="space-y-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                  {/* Reasons list */}
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-medium text-amber-400/90 block">
                       {t.queue.reasonsHeader}
                     </span>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       {reasonsList.map((reason, idx) => (
                         <div 
                           key={idx} 
-                          className="text-xs text-rose-200 bg-rose-950/30 border border-rose-500/20 p-2.5 rounded-xl flex items-start gap-2"
+                          className="text-xs text-slate-300 bg-slate-950/60 border border-slate-800/60 p-2 rounded-lg flex items-start gap-2"
                         >
-                          <span className="text-rose-400 font-bold">•</span>
+                          <span className="text-amber-400 font-bold">•</span>
                           <span className="leading-relaxed">{reason}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Action Buttons: TTS Audio, Block Scam, Approve Anyway */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                  {/* Action Bar */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
                     
-                    {/* Read Warning Aloud (TTS) Button */}
+                    {/* TTS Button */}
                     <button
                       type="button"
                       onClick={() => handleSpeakWarning(tx)}
-                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer ${
                         isSpeaking
-                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/30'
-                          : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/30 hover:border-amber-500/60'
+                          ? 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                          : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800'
                       }`}
                     >
                       {isSpeaking ? (
                         <>
-                          <VolumeX className="w-4 h-4 animate-bounce" />
+                          <VolumeX className="w-3.5 h-3.5 text-amber-300" />
                           <span>{t.queue.stopSpeech}</span>
                         </>
                       ) : (
                         <>
-                          <Volume2 className="w-4 h-4" />
+                          <Volume2 className="w-3.5 h-3.5 text-slate-400" />
                           <span>{t.queue.readAloud}</span>
                         </>
                       )}
                     </button>
 
-                    {/* Block Scam & Approve Anyway Decisions */}
+                    {/* Actions */}
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => blockHeldTransaction(tx.id)}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition cursor-pointer active:scale-95"
+                        className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition cursor-pointer"
                       >
-                        <ShieldX className="w-4 h-4" />
-                        <span>{t.queue.blockBtn}</span>
+                        {t.queue.blockBtn}
                       </button>
 
                       <button
                         type="button"
                         onClick={() => approveHeldTransaction(tx.id)}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 hover:border-emerald-500/50 transition cursor-pointer active:scale-95"
+                        className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 transition cursor-pointer"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>{t.queue.approveBtn}</span>
+                        {t.queue.approveBtn}
                       </button>
                     </div>
 
@@ -306,37 +266,26 @@ export default function ReviewQueue() {
         )}
       </div>
 
-      {/* Blocked & Resolved Alerts Log (History) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-          <h3 className="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
-            <History className="w-4 h-4 text-emerald-400" />
+      {/* Resolved Log */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             {t.queue.blockedHistoryTitle}
-          </h3>
-          <span className="text-xs text-emerald-400 font-bold">
-            {language === 'kn' ? 'ಉಳಿಸಿದ ಒಟ್ಟು ಮೊತ್ತ:' : 'Total Scams Thwarted:'}{' '}
-            ₹{computedMetrics.totalSavedFromScams.toLocaleString('en-IN')}
           </span>
         </div>
 
         {resolvedList.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4">
+          <p className="text-xs text-slate-400 text-center py-3">
             {t.queue.noHistory}
           </p>
         ) : (
-          <div className="divide-y divide-slate-800/80">
+          <div className="divide-y divide-slate-800/60">
             {resolvedList.map((item) => (
               <div key={item.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5">
-                  <span className={`p-1.5 rounded-lg ${
-                    item.status === 'BLOCKED' 
-                      ? 'bg-rose-500/10 text-rose-400' 
-                      : 'bg-emerald-500/10 text-emerald-400'
-                  }`}>
-                    {item.status === 'BLOCKED' ? <ShieldX className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${item.status === 'BLOCKED' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
                   <div>
-                    <span className="font-mono text-slate-200 block font-semibold">{item.counterparty}</span>
+                    <span className="font-mono text-slate-300 block">{item.counterparty}</span>
                     <span className="text-[11px] text-slate-400">
                       {new Date(item.createdAt).toLocaleDateString()} • {t.categories[item.category] || item.category}
                     </span>
@@ -344,10 +293,10 @@ export default function ReviewQueue() {
                 </div>
 
                 <div className="text-right">
-                  <span className={`font-black ${item.status === 'BLOCKED' ? 'text-rose-400 line-through' : 'text-emerald-400'}`}>
+                  <span className={`font-semibold ${item.status === 'BLOCKED' ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
                     ₹{Number(item.amount).toLocaleString('en-IN')}
                   </span>
-                  <span className={`block text-[10px] font-bold uppercase ${
+                  <span className={`block text-[10px] font-medium ${
                     item.status === 'BLOCKED' ? 'text-rose-400' : 'text-emerald-400'
                   }`}>
                     {t.statuses[item.status] || item.status}
