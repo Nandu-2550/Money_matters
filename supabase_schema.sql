@@ -3,9 +3,7 @@
 -- HackSprint 3.0 Production Database Definition
 -- =========================================================================
 
--- Drop existing table if recreating
--- DROP TABLE IF EXISTS transactions;
-
+-- 1. Create transactions table
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
   direction TEXT NOT NULL CHECK (direction IN ('IN', 'OUT')),
@@ -22,15 +20,20 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index frequently filtered columns
+-- 2. Index frequently filtered columns
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_direction ON transactions(direction);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
 
--- Enable Row Level Security
+-- 3. Enable Row Level Security (RLS)
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
--- Anonymous Hackathon Demonstration Policies (Public Demo Mode)
+-- 4. Idempotent Public Policies (Safe to run multiple times without 42710 errors)
+DROP POLICY IF EXISTS "Allow public read access" ON transactions;
+DROP POLICY IF EXISTS "Allow public insert access" ON transactions;
+DROP POLICY IF EXISTS "Allow public update access" ON transactions;
+DROP POLICY IF EXISTS "Allow public delete access" ON transactions;
+
 CREATE POLICY "Allow public read access" ON transactions
   FOR SELECT USING (true);
 
@@ -43,7 +46,7 @@ CREATE POLICY "Allow public update access" ON transactions
 CREATE POLICY "Allow public delete access" ON transactions
   FOR DELETE USING (true);
 
--- Trigger to auto-update updated_at timestamp
+-- 5. Auto-update timestamp trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
