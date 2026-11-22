@@ -45,6 +45,24 @@ export default function MoneyFlowDashboard() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [directionFilter, setDirectionFilter] = useState('ALL');
 
+  const totalLoaded = useMemo(() => {
+    return transactions
+      .filter(t => t.status === 'VERIFIED' && t.direction === 'IN' && (t.txCategory === 'TOPUP' || t.category === 'TOPUP'))
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  }, [transactions]);
+
+  const totalReceivedP2P = useMemo(() => {
+    return transactions
+      .filter(t => t.status === 'VERIFIED' && t.direction === 'IN' && t.txCategory !== 'TOPUP' && t.category !== 'TOPUP')
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  }, [transactions]);
+
+  const totalSpent = useMemo(() => {
+    return transactions
+      .filter(t => t.status === 'VERIFIED' && t.direction === 'OUT')
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  }, [transactions]);
+
   const chartData = useMemo(() => {
     const dateMap = {};
     const verified = transactions.filter(t => t.status === 'VERIFIED');
@@ -154,8 +172,8 @@ export default function MoneyFlowDashboard() {
           <div className="text-xl sm:text-2xl font-bold text-emerald-400 tracking-tight">
             +₹{computedMetrics.totalInflow.toLocaleString('en-IN')}
           </div>
-          <span className="text-[10px] text-slate-400 block mt-1">
-            {computedMetrics.verifiedTransactions.filter(t => t.direction === 'IN').length} {language === 'kn' ? 'ಸ್ವೀಕೃತಿಗಳು' : 'credits'}
+          <span className="text-[10px] text-slate-400 block mt-1 truncate" title={`Top-up: ₹${totalLoaded} | Received: ₹${totalReceivedP2P}`}>
+            ₹{totalLoaded.toLocaleString('en-IN')} loaded • ₹{totalReceivedP2P.toLocaleString('en-IN')} received
           </span>
         </div>
 
@@ -165,10 +183,10 @@ export default function MoneyFlowDashboard() {
             {t.verifiedOutflowLabel}
           </span>
           <div className="text-xl sm:text-2xl font-bold text-slate-200 tracking-tight">
-            -₹{computedMetrics.totalOutflow.toLocaleString('en-IN')}
+            -₹{totalSpent.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-slate-400 block mt-1">
-            {computedMetrics.verifiedTransactions.filter(t => t.direction === 'OUT').length} {language === 'kn' ? 'ಪಾವತಿಗಳು' : 'debits'}
+            {computedMetrics.verifiedTransactions.filter(t => t.direction === 'OUT').length} {language === 'kn' ? 'ಪಾವತಿಗಳು' : 'transfers'}
           </span>
         </div>
 
@@ -193,7 +211,7 @@ export default function MoneyFlowDashboard() {
           <Check className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="font-mono text-[11px] text-slate-300">
             {isBalanceRevealed
-              ? `₹${(computedMetrics.startingBalance || 25000).toLocaleString('en-IN')} + ₹${computedMetrics.totalInflow.toLocaleString('en-IN')} - ₹${computedMetrics.totalOutflow.toLocaleString('en-IN')} = ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
+              ? `₹${(computedMetrics.startingBalance || 5000).toLocaleString('en-IN')} + ₹${computedMetrics.totalInflow.toLocaleString('en-IN')} - ₹${computedMetrics.totalOutflow.toLocaleString('en-IN')} = ₹${computedMetrics.currentBalance.toLocaleString('en-IN')}`
               : `₹•••• + ₹•••• - ₹•••• = ₹•••• (Check Balance to Reveal)`}
           </span>
         </div>

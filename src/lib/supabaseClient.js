@@ -45,7 +45,8 @@ export const DEFAULT_PROFILES = [
     phone: '+91 94801 23456',
     bankName: 'Safe-Wallet Vault',
     accountLast4: '9480',
-    startingBalance: 3500,
+    startingBalance: 5000,
+    starting_balance: 5000,
     avatarInitials: 'A',
     password: '1234',
     demoPin: '5678',
@@ -270,10 +271,10 @@ export const storageService = {
 
       // Priority 1: Default benchmark profiles
       DEFAULT_PROFILES.forEach(p => combinedMap.set(p.id, p));
-      // Priority 2: Cloud profiles
-      cloudProfiles.forEach(p => combinedMap.set(p.id, p));
-      // Priority 3: Newly registered local profiles
+      // Priority 2: Newly registered local profiles (not yet in cloud)
       localList.forEach(p => combinedMap.set(p.id, p));
+      // Priority 3: Live Cloud profiles (Supabase is single authoritative source across all devices)
+      cloudProfiles.forEach(p => combinedMap.set(p.id, p));
 
       // Self-healing cloud sync: if any locally registered profile is missing from Supabase, sync it now!
       if (this.isCloudConnected() && supabase) {
@@ -365,54 +366,34 @@ export const storageService = {
   async syncTransactionToSupabase(tx) {
     if (!this.isCloudConnected() || !supabase) return false;
 
-    const fullTx = {
-      id: tx.id,
-      tx_id: tx.txId || tx.id,
+    const baseTx = {
+      id: tx.id || tx.txId || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       user_id: tx.userId,
       direction: tx.direction,
-      amount: tx.amount,
+      amount: Number(tx.amount),
       counterparty: tx.counterparty,
-      counterparty_wallet_id: tx.counterpartyWalletId || tx.counterparty,
       category: tx.category || 'Transfer',
-      tx_category: tx.txCategory || 'P2P_TRANSFER',
       message: tx.message || '',
       risk_score: tx.riskScore ?? 0,
       risk_level: tx.riskLevel || 'SAFE',
       status: tx.status || 'VERIFIED',
-      reasons: tx.reasons || [],
+      reasons: Array.isArray(tx.reasons) ? tx.reasons : (tx.reasons ? [tx.reasons] : []),
       is_collect_request: Boolean(tx.isCollectRequest),
-      is_offline_queued: Boolean(tx.isOfflineQueued),
-      voucher_signature: tx.voucherSignature || null,
       created_at: tx.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    const { error: tErr } = await supabase.from('transactions').upsert(fullTx);
-    if (tErr) {
-      // Fallback for live schema without tx_id, counterparty_wallet_id, tx_category, is_offline_queued, voucher_signature
-      const baseTx = {
-        id: tx.id,
-        user_id: tx.userId,
-        direction: tx.direction,
-        amount: tx.amount,
-        counterparty: tx.counterparty,
-        category: tx.category || 'Transfer',
-        message: tx.message || '',
-        risk_score: tx.riskScore ?? 0,
-        risk_level: tx.riskLevel || 'SAFE',
-        status: tx.status || 'VERIFIED',
-        reasons: tx.reasons || [],
-        is_collect_request: Boolean(tx.isCollectRequest),
-        created_at: tx.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      const { error: fbErr } = await supabase.from('transactions').upsert(baseTx);
-      if (fbErr) {
-        console.warn('[MoneyMatters] Supabase transaction fallback error:', fbErr);
+    try {
+      const { data, error: tErr } = await supabase.from('transactions').upsert(baseTx, { onConflict: 'id' }).select();
+      if (tErr) {
+        console.error('[MoneyMatters] Supabase transaction upsert error:', tErr);
         return false;
       }
+      return true;
+    } catch (err) {
+      console.error('[MoneyMatters] Supabase transaction sync exception:', err);
+      return false;
     }
-    return true;
   },
 
   async createProfile(newProfile) {
@@ -456,19 +437,22 @@ export const storageService = {
     return newProfile;
   },
 
-  async loadUserTransactions(userId) {
+  async loadUserTransactions(userId, userWalletId = '') {
     const fallbackSeed = DEFAULT_USER_TRANSACTIONS[userId] || [];
     const local = this.getLocalUserTransactions(userId);
-    const baseTransactions = (local && local.length > 0) ? local : fallbackSeed;
 
     // 1. Try Supabase
     if (this.isCloudConnected() && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
+        let query = supabase.from('transactions').select('*');
+        const cleanWallet = (userWalletId || '').toLowerCase().trim();
+        if (cleanWallet) {
+          query = query.or(`user_id.eq.${userId},counterparty.ilike.%${cleanWallet}%`);
+        } else {
+          query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
           const mapped = data.map(item => ({
@@ -493,24 +477,58 @@ export const storageService = {
             createdAt: item.created_at || new Date().toISOString(),
           }));
 
-          // Merge cloud with local storage without losing any local transactions
-          const mergedMap = new Map();
-          fallbackSeed.forEach(tx => mergedMap.set(tx.id || tx.txId, tx));
-          mapped.forEach(tx => mergedMap.set(tx.id || tx.txId, tx));
-          baseTransactions.forEach(tx => {
-            const key = tx.id || tx.txId;
-            if (mergedMap.has(key)) {
-              mergedMap.set(key, { ...mergedMap.get(key), ...tx });
-            } else {
-              mergedMap.set(key, tx);
-            }
-          });
+          const cloudTxIds = new Set(mapped.map(t => t.id || t.txId));
 
-          const merged = Array.from(mergedMap.values()).sort(
+          // Merge local unsynced items
+          if (local && local.length > 0) {
+            local.forEach(locTx => {
+              const locKey = locTx.id || locTx.txId;
+              if (locKey && !cloudTxIds.has(locKey)) {
+                mapped.push(locTx);
+                cloudTxIds.add(locKey);
+                this.syncTransactionToSupabase(locTx).catch(() => {});
+              }
+            });
+          }
+
+          // Merge any pending offline outbox items
+          try {
+            const outbox = JSON.parse(localStorage.getItem('mm_offline_outbox_v1') || localStorage.getItem('mm_offline_outbox') || '[]');
+            outbox.forEach(outItem => {
+              const sTx = outItem.senderTx || outItem;
+              if (sTx && (sTx.userId === userId || sTx.user_id === userId || sTx.sender_id === userId)) {
+                const sKey = sTx.id || sTx.tx_id || sTx.txId;
+                if (sKey && !cloudTxIds.has(sKey)) {
+                  mapped.push({
+                    id: sKey,
+                    txId: sKey,
+                    userId,
+                    direction: sTx.direction || 'OUT',
+                    amount: Number(sTx.amount),
+                    counterparty: sTx.counterparty || sTx.recipient_wallet_id || 'Recipient',
+                    counterpartyWalletId: sTx.recipient_wallet_id || sTx.counterparty,
+                    category: 'Transfer',
+                    txCategory: 'P2P_TRANSFER',
+                    message: sTx.note || sTx.message || 'Offline Voucher Transfer',
+                    riskScore: 0,
+                    riskLevel: 'SAFE',
+                    status: 'VERIFIED',
+                    reasons: ['Offline voucher authorized locally'],
+                    isOfflineQueued: true,
+                    createdAt: new Date(sTx.timestamp || Date.now()).toISOString()
+                  });
+                  cloudTxIds.add(sKey);
+                }
+              }
+            });
+          } catch {}
+
+          const finalTxList = (mapped.length > 0 ? mapped : fallbackSeed).sort(
             (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
           );
-          this.saveLocalUserTransactions(userId, merged);
-          return merged;
+
+          this.saveLocalUserTransactions(userId, finalTxList);
+          return finalTxList;
         }
       } catch (err) {
         console.warn('[MoneyMatters] Supabase tx fetch failed:', err);

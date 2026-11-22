@@ -4,7 +4,9 @@ import {
   Download, 
   Languages, 
   Clock, 
-  BarChart3
+  BarChart3,
+  RefreshCw,
+  WifiOff
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 
@@ -19,6 +21,8 @@ export default function Navbar() {
     promptInstall, 
     isInstalled,
     isOnline,
+    isSimulatedOffline,
+    toggleSimulateOffline,
     offlineOutboxCount,
     syncOfflineOutbox
   } = useWallet();
@@ -103,18 +107,30 @@ export default function Navbar() {
                 {offlineOutboxCount > 0 && (
                   <button
                     type="button"
-                    onClick={isOnline ? () => syncOfflineOutbox?.() : undefined}
-                    className={`ml-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold transition cursor-pointer ${
-                      isOnline 
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30' 
-                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    }`}
-                    title={isOnline ? 'Click to sync pending outbox to Supabase' : 'Pending offline payments'}
+                    onClick={() => syncOfflineOutbox?.()}
+                    className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer flex items-center gap-1"
+                    title={isOnline ? 'Click to sync pending outbox to Supabase' : 'Offline payments queued in outbox'}
                   >
-                    {offlineOutboxCount} {language === 'kn' ? 'ಬಾಕಿ' : 'pending'}
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                    <span>Sync ({offlineOutboxCount})</span>
                   </button>
                 )}
               </div>
+
+              {/* Presenter Offline Simulator Toggle (For 6:00 AM Live Demo) */}
+              <button
+                type="button"
+                onClick={toggleSimulateOffline}
+                className={`hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                  isSimulatedOffline
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+                    : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+                title={isSimulatedOffline ? 'Click to restore online mode' : 'Click to simulate offline mode without turning off Wi-Fi'}
+              >
+                <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isSimulatedOffline ? (language === 'kn' ? 'ಆಫ್‌ಲೈನ್: ಆನ್' : 'Offline: ON') : (language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಪರೀಕ್ಷೆ' : 'Test Offline')}</span>
+              </button>
 
               {/* Install PWA Button */}
               {!isInstalled && (

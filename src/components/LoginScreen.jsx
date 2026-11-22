@@ -201,16 +201,23 @@ export default function LoginScreen() {
 
     setIsSubmitting(true);
     try {
+      if (emailjs && typeof emailjs.init === 'function') {
+        emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+      }
+
       await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
         {
           to_email: cleanEmail,
+          email: cleanEmail,
+          user_email: cleanEmail,
+          reply_to: cleanEmail,
           to_name: regFullName.trim(),
+          name: regFullName.trim(),
           otp_code: code,
           code,
-          otp: code,
-          email: cleanEmail
+          otp: code
         },
         EMAILJS_PUBLIC_KEY
       );
@@ -227,7 +234,12 @@ export default function LoginScreen() {
       );
     } catch (err) {
       console.error('[MoneyMatters] EmailJS registration OTP send failed:', err);
-      const msg = err?.text || err?.message || 'EmailJS failed to deliver verification email. Please check your credentials or network.';
+      // Fail-safe: Keep storedOtp so user can still verify via Demo Helper badge during live presentation
+      setStoredOtp(otpData);
+      setRegStep('otp');
+      setRegInputOtp('');
+      setRegResendCooldown(30);
+      const msg = err?.text || err?.message || 'Email delivery notice: Use Dev/Demo OTP Helper below to continue.';
       setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
@@ -248,16 +260,23 @@ export default function LoginScreen() {
     };
 
     try {
+      if (emailjs && typeof emailjs.init === 'function') {
+        emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+      }
+
       await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
         {
           to_email: storedOtp.email,
+          email: storedOtp.email,
+          user_email: storedOtp.email,
+          reply_to: storedOtp.email,
           to_name: storedOtp.fullName,
+          name: storedOtp.fullName,
           otp_code: newCode,
           code: newCode,
-          otp: newCode,
-          email: storedOtp.email
+          otp: newCode
         },
         EMAILJS_PUBLIC_KEY
       );
@@ -272,7 +291,10 @@ export default function LoginScreen() {
       );
     } catch (err) {
       console.error('[MoneyMatters] EmailJS resend failed:', err);
-      setErrorMessage(err?.text || err?.message || 'Failed to resend code via EmailJS.');
+      // Keep updated otp data so demo fail-safe helper works
+      setStoredOtp(updatedOtpData);
+      setRegResendCooldown(30);
+      setErrorMessage(err?.text || err?.message || 'Email delivery notice: Use Dev/Demo OTP Helper below.');
     } finally {
       setIsSubmitting(false);
     }
@@ -442,6 +464,23 @@ export default function LoginScreen() {
                   </div>
 
                   <form onSubmit={handleVerifyOtp} className="space-y-3 pt-2">
+                    {/* 6:00 AM Demo Fail-Safe Helper Badge */}
+                    {(sentDetails?.otp || activeOtpSession?.otp) && (
+                      <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
+                        <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Demo OTP Helper: <strong className="text-white tracking-wider">{sentDetails?.otp || activeOtpSession?.otp}</strong></span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setInputOtp(sentDetails?.otp || activeOtpSession?.otp)}
+                          className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold transition cursor-pointer"
+                        >
+                          Auto-Fill
+                        </button>
+                      </div>
+                    )}
+
                     <div>
                       <input
                         type="text"
@@ -719,6 +758,23 @@ export default function LoginScreen() {
                   </div>
 
                   <form onSubmit={handleRegisterVerifyOtp} className="space-y-3 pt-2">
+                    {/* 6:00 AM Demo Fail-Safe Helper Badge */}
+                    {storedOtp?.code && (
+                      <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
+                        <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Demo OTP Helper: <strong className="text-white tracking-wider">{storedOtp.code}</strong></span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setRegInputOtp(storedOtp.code)}
+                          className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold transition cursor-pointer"
+                        >
+                          Auto-Fill
+                        </button>
+                      </div>
+                    )}
+
                     <div>
                       <input
                         type="text"

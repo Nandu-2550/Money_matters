@@ -41,7 +41,10 @@ export function WalletProvider({ children }) {
   const [language, setLanguage] = useState(() => {
     return localStorage.getItem('mm_lang') || 'en';
   });
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [realOnline, setRealOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
+  const isOnline = realOnline && !isSimulatedOffline;
+
   const [offlineOutboxCount, setOfflineOutboxCount] = useState(() => getOfflineOutbox().length);
   const [activeTab, setActiveTab] = useState('scan');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -89,6 +92,13 @@ export function WalletProvider({ children }) {
       removeSyncedVouchers(syncedIds);
       const remaining = getOfflineOutbox().length;
       setOfflineOutboxCount(remaining);
+      // Auto-reload transactions into active state to reflect synced state
+      if (currentUser?.id) {
+        const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+        storageService.loadUserTransactions(currentUser.id, cleanWallet).then(latestTx => {
+          setTransactions(latestTx);
+        });
+      }
       showToast(
         language === 'kn'
           ? `${syncedIds.length} ಆಫ್‌ಲೈನ್ ಪಾವತಿಗಳು ಕ್ಲೌಡ್‌ನೊಂದಿಗೆ ಸಿಂಕ್ ಆಗಿವೆ!`
@@ -96,21 +106,40 @@ export function WalletProvider({ children }) {
         'success'
       );
     }
-  }, [language, showToast]);
+  }, [language, showToast, currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
+
+  // Simulated Offline toggle helper
+  const toggleSimulateOffline = useCallback(() => {
+    setIsSimulatedOffline(prev => {
+      const next = !prev;
+      showToast(
+        next
+          ? (language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಸಿಮ್ಯುಲೇಶನ್ ಮೋಡ್ ಸಕ್ರಿಯವಾಗಿದೆ.' : 'Simulated Offline Mode enabled (Wi-Fi intact).')
+          : (language === 'kn' ? 'ಆನ್‌ಲೈನ್ ಮೋಡ್ ಮರುಸ್ಥಾಪಿಸಲಾಗಿದೆ. ಸ್ವಯಂಚಾಲಿತ ಸಿಂಕ್...' : 'Online mode restored. Auto-syncing...'),
+        next ? 'warning' : 'info'
+      );
+      if (!next) {
+        setTimeout(() => syncOfflineOutbox(), 100);
+      }
+      return next;
+    });
+  }, [language, showToast, syncOfflineOutbox]);
 
   // Online / Offline monitor + Auto-sync on reconnection
   useEffect(() => {
     const handleOnline = () => {
-      setIsOnline(true);
-      showToast(
-        language === 'kn' ? 'ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ. ಕ್ಲೌಡ್ ಸಿಂಕ್ ಸಕ್ರಿಯವಾಗಿದೆ.' : 'Connected to internet. Auto-syncing outbox...',
-        'info'
-      );
-      syncOfflineOutbox();
+      setRealOnline(true);
+      if (!isSimulatedOffline) {
+        showToast(
+          language === 'kn' ? 'ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ. ಕ್ಲೌಡ್ ಸಿಂಕ್ ಸಕ್ರಿಯವಾಗಿದೆ.' : 'Connected to internet. Auto-syncing outbox...',
+          'info'
+        );
+        syncOfflineOutbox();
+      }
     };
 
     const handleOffline = () => {
-      setIsOnline(false);
+      setRealOnline(false);
       showToast(
         language === 'kn' ? 'ಆಫ್‌ಲೈನ್ ಮೋಡ್: ಸುರಕ್ಷಿತ ವೋಚರ್ QR ಪಾವತಿಗಳು ಸಕ್ರಿಯವಾಗಿವೆ.' : 'Offline mode active: Signed voucher handshake enabled.',
         'warning'
@@ -123,7 +152,7 @@ export function WalletProvider({ children }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [language, showToast, syncOfflineOutbox]);
+  }, [language, showToast, syncOfflineOutbox, isSimulatedOffline]);
 
   // PWA install prompt monitor
   useEffect(() => {
@@ -214,11 +243,50 @@ export function WalletProvider({ children }) {
   // Load active user's transactions whenever active user changes
   useEffect(() => {
     if (currentUser?.id) {
-      storageService.loadUserTransactions(currentUser.id).then(userTx => {
+      const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+      storageService.loadUserTransactions(currentUser.id, cleanWallet).then(userTx => {
         setTransactions(userTx);
       });
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
+
+  // Supabase Realtime channel subscription for transactions table (Multi-Device Instant Sync)
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !currentUser?.id) return;
+
+    const channel = supabase
+      .channel('wallet-realtime-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload) => {
+          console.log('[WalletRealtime] Received transaction event:', payload);
+          const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+          storageService.loadUserTransactions(currentUser.id, cleanWallet).then(latestTx => {
+            setTransactions(latestTx);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
+
+  // Window focus listener to refresh transactions across browser tabs or windows
+  useEffect(() => {
+    const handleFocus = () => {
+      if (currentUser?.id) {
+        const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+        storageService.loadUserTransactions(currentUser.id, cleanWallet).then(userTx => {
+          setTransactions(userTx);
+        });
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
 
   const toggleLanguage = useCallback(() => {
     setLanguage(prev => {
@@ -346,10 +414,13 @@ export function WalletProvider({ children }) {
         id,
         full_name: cleanFullName,
         email: cleanEmail,
-        wallet_id,
+        upi_id: wallet_id,
+        phone: '+91 98765 00000',
+        bank_name: 'Safe-Wallet Vault',
+        account_last4: '8800',
         starting_balance: 5000,
-        demo_pin: cleanPin,
-        avatar_initials: initials
+        avatar_initials: initials,
+        password: cleanPin
       };
 
       // 1. Direct upsert into Supabase public.profiles (onConflict: 'email')
@@ -383,6 +454,7 @@ export function WalletProvider({ children }) {
         bankName: 'Safe-Wallet Vault',
         accountLast4: '8800',
         startingBalance: 5000,
+        starting_balance: 5000,
         avatarInitials: initials,
         password: cleanPin,
         demoPin: cleanPin,
@@ -406,30 +478,9 @@ export function WalletProvider({ children }) {
         return [...filtered, fullProfile];
       });
 
-      // 5. Initial welcome transaction
-      const welcomeTx = {
-        id: `tx_welcome_${Date.now()}`,
-        txId: `tx_welcome_${Date.now()}`,
-        userId: id,
-        direction: 'IN',
-        amount: 5000,
-        counterparty: 'Safe-Wallet Primary Vault',
-        counterpartyWalletId: 'vault@mmwallet',
-        category: 'Salary',
-        txCategory: 'TOPUP',
-        message: 'Activated Safe-Wallet Initial Allocation',
-        riskScore: 0,
-        riskLevel: 'SAFE',
-        status: 'VERIFIED',
-        reasons: ['Initial wallet activation balance.'],
-        reasonsKn: ['ಖಾತೆ ತೆರೆದ ಆರಂಭಿಕ ಹಣ ಜಮೆ.'],
-        isCollectRequest: false,
-        isOfflineQueued: false,
-        createdAt: new Date().toISOString()
-      };
-      storageService.saveLocalUserTransactions(id, [welcomeTx]);
+      storageService.saveLocalUserTransactions(id, []);
 
-      // 6. Log the user straight into their new Money Matters Wallet
+      // 5. Log the user straight into their new Money Matters Wallet
       loginAsUser(id);
       showToast(
         language === 'kn'
@@ -1176,6 +1227,8 @@ export function WalletProvider({ children }) {
     toggleLanguage,
     t,
     isOnline,
+    isSimulatedOffline,
+    toggleSimulateOffline,
     offlineOutboxCount,
     syncOfflineOutbox,
     activeTab,
