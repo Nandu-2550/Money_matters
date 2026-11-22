@@ -18,9 +18,29 @@ export default function OfflineVoucherModal({ isOpen, onClose, voucher }) {
 
   if (!isOpen || !voucher) return null;
 
-  // Resilient handling of voucher whether passed as string or object
-  const voucherObj = typeof voucher === 'string' ? JSON.parse(voucher) : voucher;
-  const voucherJsonString = typeof voucher === 'string' ? voucher : JSON.stringify(voucher);
+  // Resilient handling of voucher whether passed as string, string wrapper, or object
+  let voucherObj = {};
+  let voucherJsonString = '';
+
+  try {
+    let raw = voucher;
+    if (raw && typeof raw === 'object' && !(raw instanceof String) && raw.tx_id) {
+      voucherObj = raw;
+      voucherJsonString = JSON.stringify(raw);
+    } else {
+      let str = typeof raw === 'string' ? raw : String(raw);
+      str = str.trim();
+      if (str.startsWith('"') && str.endsWith('"')) {
+        try { str = JSON.parse(str); } catch {}
+      }
+      voucherJsonString = typeof str === 'string' ? str : JSON.stringify(str);
+      voucherObj = typeof str === 'string' ? JSON.parse(str) : str;
+    }
+  } catch (err) {
+    console.warn('[OfflineVoucherModal] Error parsing voucher:', err);
+    voucherObj = voucher || {};
+    voucherJsonString = JSON.stringify(voucherObj);
+  }
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(voucherJsonString);

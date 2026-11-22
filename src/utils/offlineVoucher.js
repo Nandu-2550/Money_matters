@@ -97,9 +97,8 @@ export async function signOfflineVoucher({
     signature: sig
   };
 
-  // Return standard JSON string with parsed object attached for convenience
-  const jsonStr = JSON.stringify(voucherObj);
-  return Object.assign(jsonStr, voucherObj);
+  // Return standard JSON string
+  return JSON.stringify(voucherObj);
 }
 
 /**
@@ -110,10 +109,15 @@ export async function signOfflineVoucher({
 export async function verifyOfflineVoucher(rawInput) {
   let voucher = null;
   try {
-    if (typeof rawInput === 'string') {
-      voucher = JSON.parse(rawInput);
-    } else if (rawInput && typeof rawInput === 'object') {
-      voucher = rawInput;
+    let clean = rawInput;
+    if (typeof clean === 'string') {
+      clean = clean.trim();
+      if (clean.startsWith('"') && clean.endsWith('"')) {
+        try { clean = JSON.parse(clean); } catch {}
+      }
+      voucher = typeof clean === 'string' ? JSON.parse(clean) : clean;
+    } else if (clean && typeof clean === 'object') {
+      voucher = clean;
     }
   } catch {
     return { valid: false, reason: 'Invalid JSON payload structure.' };
