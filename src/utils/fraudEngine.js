@@ -5,8 +5,8 @@
  */
 
 // Official SEBI Registered Entities UPI Regex Pattern
-// Format example: zerodha.brk@validhdfc, groww.brk@validaxis, hdfc.mf@validhdfc
-export const SEBI_VALID_HANDLE_REGEX = /^[a-zA-Z0-9._-]+\.(brk|mf|dp|pms|ra|ia)@valid[a-zA-Z]+$/i;
+// Format example: zerodha.brk@valid, zerodha.brk@validhdfc, groww.brk@validaxis, hdfc.mf@valid
+export const SEBI_VALID_HANDLE_REGEX = /^[a-zA-Z0-9._-]+\.(brk|mf|dp|pms|ra|ia)@valid[a-zA-Z]*$/i;
 
 // Common personal UPI handles frequently misused in informal scam schemes
 const PERSONAL_UPI_HANDLES = [
@@ -61,7 +61,8 @@ export function analyzePaymentContext({ message = '', recipientId = '', amount =
   const flagsKn = [];
 
   // 1. Detect malicious .apk download links or suspicious URLs
-  const hasApk = /\.apk(\b|\?|#)/i.test(text);
+  // Only trigger if an actual download or link ending in .apk exists
+  const hasApk = /https?:\/\/[^\s]+\.apk(\b|\?|#)/i.test(text) || /(download|install).{0,30}\.apk/i.test(text);
   const urls = message.match(/https?:\/\/[^\s]+/gi) || [];
   if (hasApk) {
     score += 55;
@@ -74,14 +75,21 @@ export function analyzePaymentContext({ message = '', recipientId = '', amount =
   }
 
   // 2. Detect PIN / OTP harvesting attempts
-  if (/(enter|share|type|send).{0,25}(pin|otp|password|cvv)/i.test(text)) {
+  // Distinguish educational security reminders ("never ask you to ... share your PIN/OTP") from malicious requests
+  const isSecurityReminder = /(never|do\s+not|don't)\s+(ask|require|tell\s+anyone\s+to\s+)?(install|share|enter|disclose).{0,40}(pin|otp|password|cvv)/i.test(text)
+    || /security\s+reminder/i.test(text);
+
+  const isAskingForPin = /(enter|share|type|send|provide).{0,25}(pin|otp|password|cvv)/i.test(text)
+    && !isSecurityReminder;
+
+  if (isAskingForPin) {
     score += 45;
     flags.push('Asks you to enter or share your Wallet PIN or OTP');
     flagsKn.push('ನಿಮ್ಮ ವಾಲೆಟ್ PIN ಅಥವಾ OTP ನಮೂದಿಸಲು ಅಥವಾ ಹಂಚಿಕೊಳ್ಳಲು ಕೇಳಲಾಗುತ್ತಿದೆ');
   }
 
   // 3. Detect fake KYC / Account Freeze / Urgency threats
-  if (/(permanently blocked|account freeze|suspended|re-kyc|kyc verification|penalty charges|within \d+ (hour|min))/i.test(text)) {
+  if (/(permanently blocked|account freeze|account\s+frozen|suspended|re-kyc|kyc verification|penalty charges|within \d+ (hour|min))/i.test(text)) {
     score += 35;
     flags.push('Fake KYC suspension or urgency threat detected');
     flagsKn.push('ನಕಲಿ KYC ಅಮಾನತು ಅಥವಾ ತುರ್ತು ಬೆದರಿಕೆ ಪತ್ತೆಯಾಗಿದೆ');
@@ -94,18 +102,33 @@ export function analyzePaymentContext({ message = '', recipientId = '', amount =
     flagsKn.push('ನಕಲಿ ಬಹುಮಾನ ಅಥವಾ ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ಬಲೆ (ಹಣ ಪಡೆಯಲು ಎಂದಿಗೂ PIN ನಮೂದಿಸುವ ಅಗತ್ಯವಿಲ್ಲ)');
   }
 
-  // 5. Extract any embedded UPI / Wallet handles and verify SEBI @valid rules
-  const extractedHandles = message.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+/g) || [];
-  const allHandles = [...new Set([recipientId, ...extractedHandles].filter(Boolean))];
-  const isInvestmentPitch = /(ipo|demat|guaranteed|weekly returns|nifty|broker|trading slot|allotment)/i.test(text);
+  // 5. Extract payment UPI handles (ignore standard email addresses like from: abc@xyz.com)
+  const extractedRaw = message.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+/g) || [];
+  const paymentHandles = extractedRaw.filter(h => {
+    const l = h.toLowerCase();
+    if (SEBI_VALID_HANDLE_REGEX.test(l)) return true;
+    if (PERSONAL_UPI_HANDLES.some(p => l.endsWith(p))) return true;
+    if (l.includes('@valid') || l.includes('@mmwallet')) return true;
+    // Exclude general web email domains (e.g. .com, .org, .example.com) that are not UPI handles
+    if (/\.(com|org|net|edu|gov|io|example\.com)$/i.test(l)) return false;
+    return true;
+  });
 
-  for (const handle of allHandles) {
-    const lowerHandle = handle.toLowerCase();
-    const isSebiValid = lowerHandle.endsWith('.brk@valid') || lowerHandle.endsWith('.mf@valid');
-    if (isInvestmentPitch && !isSebiValid) {
+  const allHandles = [...new Set([recipientId, ...paymentHandles].filter(Boolean))];
+  const isInvestmentPitch = /(ipo|demat|guaranteed|weekly returns|nifty|broker|trading slot|allotment|sip|index fund|stocks?)/i.test(text);
+
+  // Check if any handle is a verified SEBI handle (e.g. zerodha.brk@valid, groww.brk@valid)
+  const hasSebiValidHandle = allHandles.some(h => SEBI_VALID_HANDLE_REGEX.test(h.toLowerCase()));
+
+  if (hasSebiValidHandle) {
+    flags.push('Verified SEBI-registered broker handle (*.brk@valid* or *.mf@valid*)');
+    flagsKn.push('ದೃಢೀಕರಿಸಿದ SEBI ನೋಂದಾಯಿತ ಬ್ರೋಕರ್ ಹ್ಯಾಂಡಲ್ (*.brk@valid* ಅಥವಾ *.mf@valid*)');
+  } else if (isInvestmentPitch && allHandles.length > 0) {
+    const unverified = allHandles.filter(h => !SEBI_VALID_HANDLE_REGEX.test(h.toLowerCase()));
+    if (unverified.length > 0) {
       score += 50;
-      flags.push(`Unverified investment handle (${handle}) — legitimate brokers use .brk@valid or .mf@valid`);
-      flagsKn.push(`ಅನಧಿಕೃತ ಹೂಡಿಕೆ ಹ್ಯಾಂಡಲ್ (${handle}) — ಅಧಿಕೃತ ಬ್ರೋಕರ್‌ಗಳು .brk@valid ಅಥವಾ .mf@valid ಬಳಸುತ್ತಾರೆ`);
+      flags.push(`Unverified investment handle (${unverified[0]}) — legitimate brokers use .brk@valid or .mf@valid`);
+      flagsKn.push(`ಅನಧಿಕೃತ ಹೂಡಿಕೆ ಹ್ಯಾಂಡಲ್ (${unverified[0]}) — ಅಧಿಕೃತ ಬ್ರೋಕರ್‌ಗಳು .brk@valid ಅಥವಾ .mf@valid ಬಳಸುತ್ತಾರೆ`);
     }
   }
 
@@ -125,7 +148,7 @@ export function analyzePaymentContext({ message = '', recipientId = '', amount =
     status: isFraud ? 'BLOCKED_OR_GUARDIAN_REVIEW' : 'SAFE_TO_PAY',
     flags,
     flagsKn,
-    extractedHandles,
+    extractedHandles: paymentHandles.length > 0 ? paymentHandles : allHandles,
   };
 }
 

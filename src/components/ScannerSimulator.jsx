@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { findMatchingProfile } from '../lib/supabaseClient';
-import { analyzePaymentContext } from '../utils/fraudEngine';
+import { analyzePaymentContext, SEBI_VALID_HANDLE_REGEX } from '../utils/fraudEngine';
 import QRScannerModal from './QRScannerModal';
 import ReceiveQRModal from './ReceiveQRModal';
 import DemoPinModal from './DemoPinModal';
@@ -165,18 +165,41 @@ export default function ScannerSimulator() {
     const val = e.target.value;
     setMessage(val);
 
-    // If counterparty field is currently empty, check for extracted handles in pasted text
+    // 1. If counterparty field is currently empty, extract legitimate payment / SEBI beneficiary handle
     if (!counterparty.trim()) {
-      const handles = val.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+/g) || [];
-      if (handles.length > 0) {
-        setCounterparty(handles[0]);
+      // Look for explicit beneficiary handle label (e.g. "Beneficiary Handle: zerodha.brk@valid" or "UPI ID: ...")
+      const beneficiaryMatch = val.match(/(?:beneficiary\s+handle|beneficiary|payee\s+handle|upi\s+id|vpa|pay\s+to|to\s+handle):\s*([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+)/i);
+      
+      const allHandles = val.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+/g) || [];
+      const sebiHandle = allHandles.find(h => SEBI_VALID_HANDLE_REGEX.test(h.trim()));
+      const upiHandle = allHandles.find(h => !/\.(com|org|net|edu|gov|example\.com)$/i.test(h.trim()) || h.includes('@valid') || h.includes('@mmwallet'));
+
+      const chosenHandle = beneficiaryMatch ? beneficiaryMatch[1].trim() : (sebiHandle || upiHandle || (allHandles.length > 0 ? allHandles[0] : ''));
+      if (chosenHandle) {
+        setCounterparty(chosenHandle);
         showToast?.(
           language === 'kn'
-            ? `ಸಂದೇಶದಿಂದ ಸ್ವೀಕೃತಿದಾರರ ಹ್ಯಾಂಡಲ್ (${handles[0]}) ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಭರ್ತಿ ಮಾಡಲಾಗಿದೆ!`
-            : `Auto-filled recipient handle (${handles[0]}) from pasted message!`,
+            ? `ಸ್ವೀಕೃತಿದಾರರ ಹ್ಯಾಂಡಲ್ (${chosenHandle}) ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಭರ್ತಿ ಮಾಡಲಾಗಿದೆ!`
+            : `Auto-filled recipient handle (${chosenHandle}) from pasted message!`,
           'info'
         );
       }
+    }
+
+    // 2. Auto-detect Amount if amount is currently empty
+    if (!amount) {
+      const amtMatch = val.match(/(?:amount|rs\.?|inr|₹)\s*:?\s*₹?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+      if (amtMatch) {
+        const cleanAmt = amtMatch[1].replace(/,/g, '');
+        if (Number(cleanAmt) > 0) {
+          setAmount(cleanAmt);
+        }
+      }
+    }
+
+    // 3. Auto-detect Investment category if SIP / Index Fund / Stocks mentioned
+    if (/(sip|index fund|nifty|mutual fund|stock|demat|broker)/i.test(val)) {
+      setCategory('Investment');
     }
   };
 
