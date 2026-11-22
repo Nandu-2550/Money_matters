@@ -77,10 +77,6 @@ export default function ScannerSimulator() {
   const [successData, setSuccessData] = useState(null);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
 
-  // Other registered users for contacts bar (memoized)
-  const otherUsers = useMemo(() => {
-    return profiles.filter(p => p.id !== currentUser?.id);
-  }, [profiles, currentUser?.id]);
 
   // Quick Action 1: Scan Any QR
   const handleActionScanQR = () => {
@@ -119,20 +115,6 @@ export default function ScannerSimulator() {
     setShowReceiveQR(true);
   };
 
-  // Select contact from horizontal bar
-  const handleSelectContact = (contact) => {
-    setDirection('OUT');
-    setCounterparty(contact.upiId || contact.walletId);
-    setCategory('Transfer');
-    setMessage(`Transfer to ${contact.fullName}`);
-    setIsCollectRequest(false);
-    setScanResult(null);
-    setFormError('');
-    setTimeout(() => {
-      const amtEl = document.getElementById('transfer-amount-input');
-      if (amtEl) amtEl.focus();
-    }, 100);
-  };
 
   // QR Scan successful callback
   const handleQRScanSuccess = ({ upiId, payeeName, amount: qrAmount }) => {
@@ -511,47 +493,7 @@ export default function ScannerSimulator() {
           </button>
         </div>
 
-        {/* Horizontal "Money Matters Contacts" Bar */}
-        {otherUsers.length > 0 && (
-          <div className="pt-3 border-t border-slate-800/80">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{t.quickActions.contactsTitle || 'Money Matters Contacts'}</span>
-              </span>
-              <span className="text-[10px] text-emerald-400 font-medium">
-                {language === 'kn' ? 'ಮುಚ್ಚಿದ-ಲೂಪ್ P2P' : 'Closed-Loop P2P'}
-              </span>
-            </div>
 
-            <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-thin">
-              {otherUsers.map((contact) => (
-                <button
-                  key={contact.id}
-                  type="button"
-                  onClick={() => handleSelectContact(contact)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-2xl border transition shrink-0 cursor-pointer ${
-                    counterparty.toLowerCase() === contact.upiId.toLowerCase()
-                      ? 'bg-indigo-500/10 border-indigo-500/50 text-white'
-                      : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center justify-center shrink-0">
-                    {contact.avatarInitials}
-                  </div>
-                  <div className="text-left">
-                    <span className="text-xs font-bold block leading-tight text-white">
-                      {contact.fullName}
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-mono block leading-tight">
-                      {contact.upiId}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 2. Top Header Card */}
