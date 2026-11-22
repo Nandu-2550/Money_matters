@@ -1000,23 +1000,20 @@ export function WalletProvider({ children }) {
   // EXACT MATHEMATICAL RECONCILIATION PER USER
   // ==========================================
   const computedMetrics = useMemo(() => {
-    const startingBalance = Number(currentUser?.startingBalance ?? currentUser?.starting_balance) || 5000;
+    const startingBalance = Number(currentUser?.startingBalance) || 5000;
     let totalInflow = 0;
     let totalOutflow = 0;
     let totalSavedFromScams = 0;
 
     for (const tx of transactions) {
       const amt = Number(tx.amount) || 0;
-      const status = (tx.status || 'VERIFIED').toUpperCase();
-      const dir = (tx.direction || '').toUpperCase();
-
-      if (status === 'VERIFIED') {
-        if (dir === 'IN') {
+      if (tx.status === 'VERIFIED') {
+        if (tx.direction === 'IN') {
           totalInflow += amt;
-        } else if (dir === 'OUT') {
+        } else if (tx.direction === 'OUT') {
           totalOutflow += amt;
         }
-      } else if (status === 'BLOCKED') {
+      } else if (tx.status === 'BLOCKED') {
         totalSavedFromScams += amt;
       }
     }
