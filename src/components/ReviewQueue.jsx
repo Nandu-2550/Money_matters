@@ -1,28 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Clock,
-  ShieldAlert,
-  ShieldX,
-  CheckCircle2,
-  Volume2,
-  VolumeX,
-  ArrowUpRight,
-  ArrowDownLeft,
+import { 
+  Clock, 
+  ShieldAlert, 
+  ShieldX, 
+  CheckCircle2, 
+  Volume2, 
+  VolumeX, 
+  ArrowUpRight, 
+  ArrowDownLeft, 
   History,
-  AlertTriangle,
-  FileText
+  AlertTriangle
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
-import { playUrgencyChime } from '../utils/voiceAlert';
 
 export default function ReviewQueue() {
-  const {
-    language,
-    t,
-    computedMetrics,
-    approveHeldTransaction,
-    blockHeldTransaction,
-    generateCyberReport
+  const { 
+    language, 
+    t, 
+    computedMetrics, 
+    approveHeldTransaction, 
+    blockHeldTransaction 
   } = useWallet();
 
   const [isSpeakingId, setIsSpeakingId] = useState(null);
@@ -36,41 +33,47 @@ export default function ReviewQueue() {
   }, []);
 
   const handleSpeakWarning = (tx) => {
+    if (!('speechSynthesis' in window)) {
+      alert('Speech synthesis is not supported on this device.');
+      return;
+    }
+
     if (isSpeakingId === tx.id) {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      window.speechSynthesis.cancel();
       setIsSpeakingId(null);
       return;
     }
 
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
 
+    let spokenText = '';
     const reasonsList = (language === 'kn' && tx.reasonsKn?.length ? tx.reasonsKn : tx.reasons).join('. ');
-    const spokenText = language === 'kn'
-      ? `ಎಚ್ಚರಿಕೆ! ${tx.counterparty} ಗೆ ಸಂಬಂಧಿಸಿದ ${tx.amount} ರೂಪಾಯಿಗಳ ಪಾವತಿಯನ್ನು ತಡೆಹಿಡಿಯಲಾಗಿದೆ. ಕಾರಣ: ${reasonsList}`
-      : `Notice. A transaction of ${tx.amount} rupees with ${tx.counterparty} has been held for review. Details: ${reasonsList}`;
+
+    if (language === 'kn') {
+      spokenText = `ಎಚ್ಚರಿಕೆ! ${tx.counterparty} ಗೆ ಸಂಬಂಧಿಸಿದ ${tx.amount} ರೂಪಾಯಿಗಳ ಪಾವತಿಯನ್ನು ತಡೆಹಿಡಿಯಲಾಗಿದೆ. ಕಾರಣ: ${reasonsList}`;
+    } else {
+      spokenText = `Notice. A transaction of ${tx.amount} rupees with ${tx.counterparty} has been held for review. Details: ${reasonsList}`;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(spokenText);
+    utterance.rate = 0.95;
 
     const voices = window.speechSynthesis.getVoices();
-    const isKnAvailable = language === 'kn' && voices.some(v => v.lang.startsWith('kn') || v.lang.includes('IN'));
-
-    if (isKnAvailable || language === 'en') {
-      const utterance = new SpeechSynthesisUtterance(spokenText);
-      utterance.rate = 0.95;
-      if (language === 'kn') {
-        utterance.voice = voices.find(v => v.lang.startsWith('kn') || v.lang.includes('IN'));
-        utterance.lang = 'kn-IN';
-      } else {
-        utterance.voice = voices.find(v => v.lang.startsWith('en-IN') || v.lang.startsWith('en'));
-        utterance.lang = 'en-IN';
-      }
-      utterance.onend = () => setIsSpeakingId(null);
-      utterance.onerror = () => setIsSpeakingId(null);
-      setIsSpeakingId(tx.id);
-      window.speechSynthesis.speak(utterance);
+    if (language === 'kn') {
+      const knVoice = voices.find(v => v.lang.startsWith('kn') || v.lang.includes('IN'));
+      if (knVoice) utterance.voice = knVoice;
+      utterance.lang = 'kn-IN';
     } else {
-      playUrgencyChime();
-      setIsSpeakingId(tx.id);
-      setTimeout(() => setIsSpeakingId(null), 2000);
+      const inVoice = voices.find(v => v.lang.startsWith('en-IN') || v.lang.startsWith('en-GB') || v.lang.startsWith('en'));
+      if (inVoice) utterance.voice = inVoice;
+      utterance.lang = 'en-IN';
     }
+
+    utterance.onend = () => setIsSpeakingId(null);
+    utterance.onerror = () => setIsSpeakingId(null);
+
+    setIsSpeakingId(tx.id);
+    window.speechSynthesis.speak(utterance);
   };
 
   const heldList = computedMetrics.heldTransactions;
@@ -263,7 +266,7 @@ export default function ReviewQueue() {
         )}
       </div>
 
-                  {/* Resolved Log */}
+      {/* Resolved Log */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
         <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -289,34 +292,21 @@ export default function ReviewQueue() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {item.status === 'BLOCKED' && (
-                    <button
-                      type="button"
-                      onClick={() => generateCyberReport(item)}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-500/30 rounded text-[10px] font-semibold flex items-center gap-1 transition"
-                    >
-                      <FileText className="w-3 h-3" />
-                      <span>{language === 'kn' ? '1930 ವರದಿ' : '1930 Report'}</span>
-                    </button>
-                  )}
-                  <div className="text-right">
-                    <span className={`font-semibold ${item.status === 'BLOCKED' ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
-                      ₹{Number(item.amount).toLocaleString('en-IN')}
-                    </span>
-                    <span className={`block text-[10px] font-medium ${
-                      item.status === 'BLOCKED' ? 'text-rose-400' : 'text-emerald-400'
-                    }`}>
-                      {t.statuses[item.status] || item.status}
-                    </span>
-                  </div>
+                <div className="text-right">
+                  <span className={`font-semibold ${item.status === 'BLOCKED' ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
+                    ₹{Number(item.amount).toLocaleString('en-IN')}
+                  </span>
+                  <span className={`block text-[10px] font-medium ${
+                    item.status === 'BLOCKED' ? 'text-rose-400' : 'text-emerald-400'
+                  }`}>
+                    {t.statuses[item.status] || item.status}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-
 
     </div>
   );

@@ -1,45 +1,43 @@
 import React, { useState, useMemo } from 'react';
-import {
-  TrendingUp,
-  Wallet,
-  ArrowDownLeft,
-  ArrowUpRight,
-  ShieldCheck,
-  Sliders,
-  Info,
+import { 
+  TrendingUp, 
+  Wallet, 
+  ArrowDownLeft, 
+  ArrowUpRight, 
+  ShieldCheck, 
+  Sliders, 
+  Info, 
   Building2,
   Filter,
   Check,
   Eye,
-  EyeOff,
-  Play
+  EyeOff
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-  PieChart,
-  Pie,
-  Cell
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  CartesianGrid, 
+  Legend, 
+  PieChart, 
+  Pie, 
+  Cell 
 } from 'recharts';
 import { useWallet } from '../context/WalletContext';
 
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
 
 export default function MoneyFlowDashboard() {
-  const {
-    language,
-    t,
-    transactions,
-    computedMetrics,
-    isBalanceRevealed,
-    setIsBalanceRevealed,
-    submitTransaction
+  const { 
+    language, 
+    t, 
+    transactions, 
+    computedMetrics, 
+    isBalanceRevealed, 
+    setIsBalanceRevealed 
   } = useWallet();
 
   const [monthlyAmount, setMonthlyAmount] = useState(2500);
@@ -137,45 +135,12 @@ export default function MoneyFlowDashboard() {
     });
   }, [transactions, statusFilter, directionFilter]);
 
-  const runPreset = async (preset) => {
-    await submitTransaction(preset);
-  };
-
-  const demos = [
-    {
-      label: 'Safe Kirana',
-      preset: { direction: 'OUT', counterparty: 'ravi.store@okicici', amount: 350, category: 'Retail', message: 'Kirana Store Payment' }
-    },
-    {
-      label: 'Refund Trap',
-      preset: { direction: 'IN', counterparty: 'fraud.refund@paytm', amount: 8500, category: 'Retail', message: 'Enter UPI PIN to receive refund', isCollectRequest: true }
-    },
-    {
-      label: 'Fake Investment',
-      preset: { direction: 'OUT', counterparty: 'vip.trading@okaxis', amount: 10000, category: 'Investment', message: 'Guaranteed 50% weekly return VIP stock group' }
-    },
-    {
-      label: 'Malicious Link',
-      preset: { direction: 'OUT', counterparty: 'user.unknown@upi', amount: 5000, category: 'Other', message: 'Download app here: http://app.xyz/secure.apk' }
-    }
-  ];
-
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Demo Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap gap-2 items-center">
-        <span className="text-xs font-semibold text-slate-400 mr-2 uppercase">Demo Scenarios:</span>
-        {demos.map((d, i) => (
-          <button key={i} onClick={() => runPreset(d.preset)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-xs font-medium text-slate-300 transition">
-            <Play className="w-3 h-3 text-emerald-400" />
-            {d.label}
-          </button>
-        ))}
-      </div>
-
+      
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-
+        
         {/* Balance */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-1">

@@ -109,21 +109,6 @@ export const translations = {
       manageAccounts: "Manage Accounts",
       activeAccount: "Active Account"
     },
-    advisor: {
-      title: "Money Matters AI Shield Advisor",
-      subtitle: "Ask any question about UPI payments, SEBI brokers, or scam red flags in English or Kannada",
-      placeholder: "Ask about a scam, suspicious link, or investment handle...",
-      send: "Ask AI",
-      thinking: "Shield AI is thinking...",
-      defaultGreeting: "Namaste! I am your Money Matters Shield AI Advisor. How can I help protect your money today?",
-      defaultGreetingKn: "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ 'ಮನಿ ಮ್ಯಾಟರ್ಸ್' ಸೆಕ್ಯೂರಿಟಿ ಎಐ ಸಹಾಯಕಿ. ನಿಮ್ಮ ಹಣವನ್ನು ವಂಚನೆಯಿಂದ ರಕ್ಷಿಸಲು ನಾನು ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?",
-      preset1: "How to tell if a Collect Request is fake?",
-      preset1Kn: "UPI ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ನಕಲಿ ಎಂದು ತಿಳಿಯುವುದು ಹೇಗೆ?",
-      preset2: "How to check if an investment handle is SEBI registered?",
-      preset2Kn: "ಹೂಡಿಕೆ ಹ್ಯಾಂಡಲ್ SEBI ನೋಂದಾಯಿತವೇ ಎಂದು ಪರಿಶೀಲಿಸುವುದು ಹೇಗೆ?",
-      preset3: "What to do if I fell for a scam? (1930 Helpline)",
-      preset3Kn: "ವಂಚನೆಗೆ ಒಳಗಾದರೆ ಏನು ಮಾಡಬೇಕು? (1930 ಸಹಾಯವಾಣಿ)"
-    },
     quickActions: {
       profile: "Profile",
       scanQr: "Scan Any QR",
@@ -520,19 +505,5 @@ export const translations = {
       HELD_FOR_REVIEW: "ತಡೆಹಿಡಿಯಲಾಗಿದೆ",
       BLOCKED: "ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ"
     }
-  },
-  kn: {
-    advisor: {
-      title: "ಮನಿ ಮ್ಯಾಟರ್ಸ್ ಎಐ ಸೆಕ್ಯೂರಿಟಿ ಸಹಾಯಕಿ",
-      subtitle: "UPI ಪಾವತಿಗಳು, SEBI ಬ್ರೋಕರ್‌ಗಳು ಅಥವಾ ವಂಚನೆಯ ಎಚ್ಚರಿಕೆಗಳ ಬಗ್ಗೆ ಕನ್ನಡ ಅಥವಾ ಇಂಗ್ಲಿಷ್‌ನಲ್ಲಿ ಕೇಳಿ",
-      placeholder: "ವಂಚನೆ, ಶಂಕಿತ ಲಿಂಕ್ ಅಥವಾ ಹೂಡಿಕೆ ಹ್ಯಾಂಡಲ್ ಬಗ್ಗೆ ಕೇಳಿ...",
-      send: "ಕೇಳಿ",
-      thinking: "ಎಐ ಸಹಾಯಕಿ ಯೋಚಿಸುತ್ತಿದೆ...",
-      defaultGreeting: "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ 'ಮನಿ ಮ್ಯಾಟರ್ಸ್' ಸೆಕ್ಯೂರಿಟಿ ಎಐ ಸಹಾಯಕಿ. ನಿಮ್ಮ ಹಣವನ್ನು ವಂಚನೆಯಿಂದ ರಕ್ಷಿಸಲು ನಾನು ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?",
-      preset1: "UPI ಕಲೆಕ್ಟ್ ರಿಕ್ವೆಸ್ಟ್ ನಕಲಿ ಎಂದು ತಿಳಿಯುವುದು ಹೇಗೆ?",
-      preset2: "ಹೂಡಿಕೆ ಹ್ಯಾಂಡಲ್ SEBI ನೋಂದಾಯಿತವೇ ಎಂದು ಪರಿಶೀಲಿಸುವುದು ಹೇಗೆ?",
-      preset3: "ವಂಚನೆಗೆ ಒಳಗಾದರೆ ಏನು ಮಾಡಬೇಕು? (1930 ಸಹಾಯವಾಣಿ)"
-    }
   }
 };
-
