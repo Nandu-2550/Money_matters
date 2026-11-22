@@ -104,8 +104,14 @@ export default function ScannerSimulator() {
     );
   };
 
-  // Quick Action 3: Check Balance (Triggers Demo PIN first)
+  // Quick Action 3: Check Balance (Triggers Demo PIN first and refetches fresh balance)
   const handleActionCheckBalance = () => {
+    if (currentUser?.id) {
+      const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+      storageService.loadUserTransactions(currentUser.id, cleanWallet).then(fresh => {
+        if (Array.isArray(fresh)) setTransactions(fresh);
+      }).catch(() => {});
+    }
     setPinModalMode('balance');
     setShowPinModal(true);
   };
@@ -336,6 +342,15 @@ export default function ScannerSimulator() {
     setShowPinModal(false);
 
     if (pinModalMode === 'balance') {
+      if (currentUser?.id) {
+        const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+        try {
+          const fresh = await storageService.loadUserTransactions(currentUser.id, cleanWallet);
+          if (Array.isArray(fresh)) setTransactions(fresh);
+        } catch (err) {
+          console.warn('[BalanceCheck] Error refreshing transactions:', err);
+        }
+      }
       setIsBalanceRevealed(true);
       setShowBalanceModal(true);
       return;
