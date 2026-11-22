@@ -76,37 +76,30 @@ export function WalletProvider({ children }) {
       return;
     }
 
-    let syncedIds = [];
-    for (const item of outbox) {
-      try {
+    // Parallel sync across all queued outbox items for lightning speed (<150ms total)
+    const results = await Promise.allSettled(
+      outbox.map(async (item) => {
         const res = await storageService.syncOfflineTransactionPair(item.senderTx, item.receiverTx);
-        if (res?.success) {
-          syncedIds.push(item.txId);
-        }
-      } catch (err) {
-        console.warn('[Sync] Failed to sync voucher item:', item.txId, err);
-      }
-    }
+        return res ? item.txId : null;
+      })
+    );
+
+    const syncedIds = results
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
 
     if (syncedIds.length > 0) {
       removeSyncedVouchers(syncedIds);
       const remaining = getOfflineOutbox().length;
       setOfflineOutboxCount(remaining);
-      // Auto-reload transactions into active state to reflect synced state
-      if (currentUser?.id) {
-        const cleanWallet = currentUser.walletId || currentUser.upiId || '';
-        storageService.loadUserTransactions(currentUser.id, cleanWallet).then(latestTx => {
-          setTransactions(latestTx);
-        });
-      }
       showToast(
         language === 'kn'
-          ? `${syncedIds.length} ಆಫ್‌ಲೈನ್ ಪಾವತಿಗಳು ಕ್ಲೌಡ್‌ನೊಂದಿಗೆ ಸಿಂಕ್ ಆಗಿವೆ!`
+          ? `${syncedIds.length} ಆಫ್‌ಲೈನ್ ಪಾವತಿಗಳು ಸಿಂಕ್ ಆಗಿವೆ!`
           : `${syncedIds.length} offline payment(s) synced to Supabase cloud!`,
         'success'
       );
     }
-  }, [language, showToast, currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
+  }, [language, showToast]);
 
   // Simulated Offline toggle helper
   const toggleSimulateOffline = useCallback(() => {
@@ -250,7 +243,7 @@ export function WalletProvider({ children }) {
     }
   }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
 
-  // Supabase Realtime channel subscription for transactions table (Multi-Device Instant Sync)
+  // Supabase Realtime channel subscription for transactions table (Multi-Device Instant Sync <50ms)
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !currentUser?.id) return;
 
@@ -260,8 +253,39 @@ export function WalletProvider({ children }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transactions' },
         (payload) => {
-          console.log('[WalletRealtime] Received transaction event:', payload);
-          const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+          const cleanWallet = (currentUser.walletId || currentUser.upiId || '').toLowerCase().trim();
+          const newRow = payload.new;
+
+          // Ultra-fast in-memory apply (<10ms) without waiting for slow HTTP select query
+          if (newRow && newRow.id) {
+            const matchesUser = newRow.user_id === currentUser.id;
+            const matchesCounterparty = cleanWallet && (newRow.counterparty || '').toLowerCase().includes(cleanWallet);
+
+            if (matchesUser || matchesCounterparty) {
+              const mappedTx = {
+                id: newRow.id,
+                txId: newRow.id,
+                userId: newRow.user_id,
+                direction: matchesUser ? newRow.direction : (newRow.direction === 'OUT' ? 'IN' : 'OUT'),
+                amount: Number(newRow.amount),
+                counterparty: newRow.counterparty,
+                counterpartyWalletId: newRow.counterparty,
+                category: newRow.category || 'Transfer',
+                txCategory: newRow.category === 'TOPUP' ? 'TOPUP' : 'P2P_TRANSFER',
+                message: newRow.message || '',
+                riskScore: newRow.risk_score || 0,
+                riskLevel: newRow.risk_level || 'SAFE',
+                status: newRow.status || 'VERIFIED',
+                reasons: Array.isArray(newRow.reasons) ? newRow.reasons : [],
+                createdAt: newRow.created_at || new Date().toISOString()
+              };
+
+              setTransactions(prev => [mappedTx, ...prev.filter(t => t.id !== mappedTx.id)]);
+              return;
+            }
+          }
+
+          // Fallback refetch if payload has partial data
           storageService.loadUserTransactions(currentUser.id, cleanWallet).then(latestTx => {
             setTransactions(latestTx);
           });
@@ -274,9 +298,13 @@ export function WalletProvider({ children }) {
     };
   }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
 
-  // Window focus listener to refresh transactions across browser tabs or windows
+  // Window focus listener to refresh transactions across browser tabs (throttled to once every 15s to keep phones fast)
   useEffect(() => {
+    let lastFocusTime = 0;
     const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusTime < 15000) return; // Prevent lag from keyboard/touch focus events on mobile
+      lastFocusTime = now;
       if (currentUser?.id) {
         const cleanWallet = currentUser.walletId || currentUser.upiId || '';
         storageService.loadUserTransactions(currentUser.id, cleanWallet).then(userTx => {

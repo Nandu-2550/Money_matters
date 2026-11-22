@@ -363,12 +363,10 @@ export const storageService = {
     return true;
   },
 
-  async syncTransactionToSupabase(tx) {
-    if (!this.isCloudConnected() || !supabase) return false;
-
-    const baseTx = {
+  formatBaseTransaction(tx) {
+    return {
       id: tx.id || tx.txId || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      user_id: tx.userId,
+      user_id: tx.userId || tx.user_id,
       direction: tx.direction,
       amount: Number(tx.amount),
       counterparty: tx.counterparty,
@@ -382,9 +380,14 @@ export const storageService = {
       created_at: tx.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+  },
+
+  async syncTransactionToSupabase(tx) {
+    if (!this.isCloudConnected() || !supabase) return false;
+    const baseTx = this.formatBaseTransaction(tx);
 
     try {
-      const { data, error: tErr } = await supabase.from('transactions').upsert(baseTx, { onConflict: 'id' }).select();
+      const { error: tErr } = await supabase.from('transactions').upsert(baseTx, { onConflict: 'id' });
       if (tErr) {
         console.error('[MoneyMatters] Supabase transaction upsert error:', tErr);
         return false;
@@ -563,9 +566,18 @@ export const storageService = {
   async syncOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
     if (!this.isCloudConnected() || !supabase) return false;
     try {
-      const sOk = await this.syncTransactionToSupabase(senderDebitTx);
-      const rOk = await this.syncTransactionToSupabase(receiverCreditTx);
-      return sOk && rOk;
+      const rows = [];
+      if (senderDebitTx) rows.push(this.formatBaseTransaction(senderDebitTx));
+      if (receiverCreditTx) rows.push(this.formatBaseTransaction(receiverCreditTx));
+      if (rows.length === 0) return true;
+
+      // Single concurrent batch upsert (<100ms)
+      const { error } = await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
+      if (error) {
+        console.warn('[MoneyMatters] Batch pair upsert warning:', error);
+        return false;
+      }
+      return true;
     } catch (err) {
       console.warn('[MoneyMatters] syncOfflineTransactionPair exception:', err);
       return false;

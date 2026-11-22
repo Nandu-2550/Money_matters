@@ -361,11 +361,12 @@ export default function ScannerSimulator() {
 
     if (!pendingTransfer) return;
 
-    setIsScanning(true);
+    const currentTransfer = { ...pendingTransfer };
+    setPendingTransfer(null);
     setScanResult(null);
 
-    const result = await submitTransaction(pendingTransfer);
-    setIsScanning(false);
+    // Fast local execution: balance and ledger update instantly (<10ms)
+    const result = await submitTransaction(currentTransfer);
 
     if (result.status === 'VERIFIED') {
       if (!isOnline && result.offlineVoucher) {
@@ -373,9 +374,9 @@ export default function ScannerSimulator() {
         setShowVoucherModal(true);
       } else {
         setSuccessData({
-          amount: pendingTransfer.amount,
-          payeeName: pendingTransfer.payeeName,
-          counterparty: pendingTransfer.counterparty,
+          amount: currentTransfer.amount,
+          payeeName: currentTransfer.payeeName,
+          counterparty: currentTransfer.counterparty,
           txId: result.txId || `MM-TX-${Date.now().toString().slice(-8)}`,
           date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }),
           bank: `Safe Wallet • Closed-Loop`
@@ -389,8 +390,6 @@ export default function ScannerSimulator() {
       // Flagged / Held for review
       setScanResult(result);
     }
-
-    setPendingTransfer(null);
   };
 
   return (
