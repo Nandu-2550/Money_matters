@@ -1171,6 +1171,45 @@ export function WalletProvider({ children }) {
   }, [currentUser.id, language, showToast]);
 
   // Reset demo data
+  const exportAuditLog = useCallback(() => {
+    const header = ['Timestamp', 'Type', 'Counterparty', 'Amount', 'Status', 'Risk Score', 'Rules Triggered'];
+    const rows = transactions.map(t => [
+      t.createdAt,
+      t.direction,
+      t.counterparty,
+      t.amount,
+      t.status,
+      t.riskScore,
+      `"${t.reasons.join('; ')}"`
+    ]);
+
+    const csvContent = [header, ...rows].map(e => e.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'money-matters-audit-log.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    showToast(language === 'kn' ? 'ಆಡಿಟ್ ಲಾಗ್ ರಫ್ತು ಮಾಡಲಾಗಿದೆ' : 'Audit log exported!', 'success');
+  }, [transactions, language, showToast]);
+
+  const generateCyberReport = useCallback((tx) => {
+    const report = `--- 1930 Cybercrime Incident Report ---
+Timestamp: ${tx.createdAt}
+Amount: ₹${tx.amount.toLocaleString('en-IN')}
+Suspected UPI ID: ${tx.counterparty}
+Risk Score: ${tx.riskScore}/100
+Triggered Rules:
+${tx.reasons.map(r => `- ${r}`).join('\n')}
+-----------------------------------------
+This report is for authorized use with the National Cybercrime Helpline (1930).`;
+
+    navigator.clipboard.writeText(report);
+    showToast(language === 'kn' ? 'ವರದಿಯನ್ನು ಕಾಪಿ ಮಾಡಲಾಗಿದೆ!' : 'Report copied to clipboard!', 'success');
+  }, [language, showToast]);
+
+  // Reset demo data
   const resetDemoData = useCallback(async () => {
     try {
       if (!currentUser?.id) return;
@@ -1245,6 +1284,8 @@ export function WalletProvider({ children }) {
     approveHeldTransaction,
     blockHeldTransaction,
     resetDemoData,
+    exportAuditLog,
+    generateCyberReport,
     isProfileModalOpen,
     setIsProfileModalOpen,
     isTopUpModalOpen,
