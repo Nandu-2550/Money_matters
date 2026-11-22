@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { firebaseStorageService } from './firebaseClient';
 
 const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (typeof process !== 'undefined' && process.env ? process.env : {});
 const supabaseUrl = env.VITE_SUPABASE_URL;
@@ -235,65 +236,26 @@ export const storageService = {
   },
 
   async loadProfiles() {
-    let cloudProfiles = [];
-    if (this.isCloudConnected() && supabase) {
-      try {
-        const { data, error } = await supabase.from('profiles').select('*');
-        if (!error && Array.isArray(data) && data.length > 0) {
-          cloudProfiles = data.map(p => ({
-            id: p.id,
-            fullName: p.full_name,
-            email: p.email,
-            walletId: p.wallet_id || p.upi_id || `${p.email.split('@')[0]}@mmwallet`,
-            wallet_id: p.wallet_id || p.upi_id || `${p.email.split('@')[0]}@mmwallet`,
-            upiId: p.wallet_id || p.upi_id,
-            phone: p.phone,
-            bankName: p.bank_name || 'Safe-Wallet Vault',
-            accountLast4: p.account_last4 || '8800',
-            startingBalance: Number(p.starting_balance) || 5000,
-            avatarInitials: p.avatar_initials,
-            password: p.password || '1234',
-            demoPin: p.demo_pin || p.demoPin || (p.id === 'usr_anjaneya' ? '5678' : (p.id === 'usr_nandeesh' ? '1234' : '0000')),
-            demo_pin: p.demo_pin || p.demoPin || (p.id === 'usr_anjaneya' ? '5678' : (p.id === 'usr_nandeesh' ? '1234' : '0000')),
-            createdAt: p.created_at
-          }));
-        }
-      } catch (err) {
-        console.warn('[MoneyMatters] Profiles fetch from Supabase failed:', err);
-      }
-    }
-
-    // Merge with LocalStorage to preserve any newly created users
     try {
-      const local = localStorage.getItem(PROFILES_STORAGE_KEY);
-      const localList = local ? JSON.parse(local) : [];
-      const combinedMap = new Map();
-
-      // Priority 1: Default benchmark profiles
-      DEFAULT_PROFILES.forEach(p => combinedMap.set(p.id, p));
-      // Priority 2: Newly registered local profiles (not yet in cloud)
-      localList.forEach(p => combinedMap.set(p.id, p));
-      // Priority 3: Live Cloud profiles (Supabase is single authoritative source across all devices)
-      cloudProfiles.forEach(p => combinedMap.set(p.id, p));
-
-      // Self-healing cloud sync: if any locally registered profile is missing from Supabase, sync it now!
-      if (this.isCloudConnected() && supabase) {
-        const cloudIds = new Set(cloudProfiles.map(p => p.id));
-        localList.forEach(localProf => {
-          if (localProf && localProf.id && !cloudIds.has(localProf.id) && localProf.id !== 'usr_nandeesh' && localProf.id !== 'usr_anjaneya') {
-            this.syncProfileToSupabase(localProf).catch(e => {
-              console.warn('[MoneyMatters] Background profile sync deferred:', e);
-            });
-          }
-        });
-      }
-
-      const merged = Array.from(combinedMap.values());
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(merged));
-      return merged;
-    } catch {
-      return DEFAULT_PROFILES;
+      const fbProfiles = await firebaseStorageService.loadProfiles();
+      if (fbProfiles && fbProfiles.length > 0) return fbProfiles;
+    } catch (e) {
+      console.warn('[Storage] Firebase loadProfiles warning:', e);
     }
+    const local = localStorage.getItem(PROFILES_STORAGE_KEY);
+    return local ? JSON.parse(local) : DEFAULT_PROFILES;
+  },
+
+  async createProfile(newProfile) {
+    try {
+      await firebaseStorageService.createProfile(newProfile);
+    } catch (e) {
+      console.warn('[Storage] Firebase createProfile warning:', e);
+    }
+    if (this.isCloudConnected() && supabase) {
+      this.syncProfileToSupabase(newProfile).catch(() => {});
+    }
+    return newProfile;
   },
 
   async syncProfileToSupabase(profile) {
@@ -442,121 +404,34 @@ export const storageService = {
   },
 
   async loadUserTransactions(userId, userWalletId = '') {
-    const fallbackSeed = DEFAULT_USER_TRANSACTIONS[userId] || [];
-    const local = this.getLocalUserTransactions(userId);
-
-    // 1. Try Supabase
-    if (this.isCloudConnected() && supabase) {
-      try {
-        const query = supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', userId);
-
-        const { data, error } = await query.order('created_at', { ascending: false });
-
-        if (!error && Array.isArray(data)) {
-          const mapped = data.map(item => ({
-            id: item.id,
-            txId: item.tx_id || item.id,
-            userId: item.user_id,
-            direction: item.direction,
-            amount: Number(item.amount),
-            counterparty: item.counterparty,
-            counterpartyWalletId: item.counterparty_wallet_id || item.counterparty,
-            category: item.category,
-            txCategory: item.tx_category || 'P2P_TRANSFER',
-            message: item.message || '',
-            riskScore: item.risk_score,
-            riskLevel: item.risk_level,
-            status: item.status,
-            reasons: Array.isArray(item.reasons) ? item.reasons : (item.reasons ? JSON.parse(item.reasons) : []),
-            reasonsKn: Array.isArray(item.reasons_kn) ? item.reasons_kn : [],
-            isCollectRequest: Boolean(item.is_collect_request),
-            isOfflineQueued: Boolean(item.is_offline_queued),
-            voucherSignature: item.voucher_signature || null,
-            createdAt: item.created_at || new Date().toISOString(),
-          }));
-
-          const cloudTxIds = new Set(mapped.map(t => t.id || t.txId));
-
-          // Merge local unsynced items
-          if (local && local.length > 0) {
-            local.forEach(locTx => {
-              const locKey = locTx.id || locTx.txId;
-              if (locKey && !cloudTxIds.has(locKey)) {
-                mapped.push(locTx);
-                cloudTxIds.add(locKey);
-                this.syncTransactionToSupabase(locTx).catch(() => {});
-              }
-            });
-          }
-
-          // Merge any pending offline outbox items
-          try {
-            const outbox = JSON.parse(localStorage.getItem('mm_offline_outbox_v1') || localStorage.getItem('mm_offline_outbox') || '[]');
-            outbox.forEach(outItem => {
-              const sTx = outItem.senderTx || outItem;
-              if (sTx && (sTx.userId === userId || sTx.user_id === userId || sTx.sender_id === userId)) {
-                const sKey = sTx.id || sTx.tx_id || sTx.txId;
-                if (sKey && !cloudTxIds.has(sKey)) {
-                  mapped.push({
-                    id: sKey,
-                    txId: sKey,
-                    userId,
-                    direction: sTx.direction || 'OUT',
-                    amount: Number(sTx.amount),
-                    counterparty: sTx.counterparty || sTx.recipient_wallet_id || 'Recipient',
-                    counterpartyWalletId: sTx.recipient_wallet_id || sTx.counterparty,
-                    category: 'Transfer',
-                    txCategory: 'P2P_TRANSFER',
-                    message: sTx.note || sTx.message || 'Offline Voucher Transfer',
-                    riskScore: 0,
-                    riskLevel: 'SAFE',
-                    status: 'VERIFIED',
-                    reasons: ['Offline voucher authorized locally'],
-                    isOfflineQueued: true,
-                    createdAt: new Date(sTx.timestamp || Date.now()).toISOString()
-                  });
-                  cloudTxIds.add(sKey);
-                }
-              }
-            });
-          } catch {}
-
-          const finalTxList = (mapped.length > 0 ? mapped : fallbackSeed).sort(
-            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
-          );
-
-          this.saveLocalUserTransactions(userId, finalTxList);
-          return finalTxList;
-        }
-      } catch (err) {
-        console.warn('[MoneyMatters] Supabase tx fetch failed:', err);
+    if (!userId) return [];
+    try {
+      const fbTx = await firebaseStorageService.loadUserTransactions(userId);
+      if (fbTx && fbTx.length > 0) {
+        this.saveLocalUserTransactions(userId, fbTx);
+        return fbTx;
       }
+    } catch (e) {
+      console.warn('[Storage] Firebase loadUserTransactions error:', e);
     }
-
-    // 2. Return local storage transactions
-    if (local && local.length > 0) {
-      return local;
-    }
-
-    // 3. Fallback to pre-seeded transactions
-    this.saveLocalUserTransactions(userId, fallbackSeed);
-    return fallbackSeed;
+    const local = this.getLocalUserTransactions(userId);
+    return local && local.length > 0 ? local : (DEFAULT_USER_TRANSACTIONS[userId] || []);
   },
 
   async saveNewTransaction(tx) {
-    const userId = tx.userId;
+    const userId = tx.userId || tx.user_id;
     const current = this.getLocalUserTransactions(userId);
     const updated = [tx, ...current.filter(t => t.id !== tx.id && t.txId !== (tx.txId || tx.id))];
     this.saveLocalUserTransactions(userId, updated);
 
-    // Asynchronous non-blocking cloud sync (ultra-fast <15ms transfer experience)
+    // Fast write to Firebase first (<15ms)
+    firebaseStorageService.saveNewTransaction(tx).catch(err => {
+      console.warn('[Firebase] Transaction save error:', err);
+    });
+
+    // Mirror to Supabase in background
     if (this.isCloudConnected() && supabase) {
-      this.syncTransactionToSupabase(tx).catch(err => {
-        console.warn('[MoneyMatters] Supabase background insert deferred:', err);
-      });
+      this.syncTransactionToSupabase(tx).catch(() => {});
     }
     return updated;
   },
@@ -593,66 +468,11 @@ export const storageService = {
   },
 
   async syncOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
-    if (!this.isCloudConnected() || !supabase) return false;
     try {
-      // 1. Resolve and format sender transaction
-      let senderRow = null;
-      if (senderDebitTx) {
-        const rawSenderId = senderDebitTx.userId || senderDebitTx.user_id;
-        const senderUserId = await this.resolveProfileId(rawSenderId);
-        senderRow = this.formatBaseTransaction({
-          ...senderDebitTx,
-          userId: senderUserId || rawSenderId
-        });
-      }
-
-      // 2. Resolve and format receiver transaction (only if internal registered user)
-      let receiverRow = null;
-      if (receiverCreditTx) {
-        const rawReceiverId = receiverCreditTx.userId || receiverCreditTx.user_id || receiverCreditTx.counterparty;
-        const receiverUserId = await this.resolveProfileId(rawReceiverId);
-        if (receiverUserId) {
-          receiverRow = this.formatBaseTransaction({
-            ...receiverCreditTx,
-            userId: receiverUserId
-          });
-        }
-      }
-
-      const rowsToUpsert = [];
-      if (senderRow) rowsToUpsert.push(senderRow);
-      if (receiverRow) rowsToUpsert.push(receiverRow);
-
-      if (rowsToUpsert.length === 0) return true;
-
-      // 3. Fast batch upsert (<100ms)
-      if (rowsToUpsert.length > 1) {
-        const { error: batchErr } = await supabase.from('transactions').upsert(rowsToUpsert, { onConflict: 'id' });
-        if (!batchErr) return true;
-        console.warn('[MoneyMatters] Batch pair upsert warning, retrying individually:', batchErr);
-      }
-
-      // 4. Safe individual upserts (ensures sender debit NEVER fails if receiver fails)
-      let senderSynced = false;
-      if (senderRow) {
-        const { error: sErr } = await supabase.from('transactions').upsert(senderRow, { onConflict: 'id' });
-        if (!sErr) {
-          senderSynced = true;
-        } else {
-          console.error('[MoneyMatters] Failed to upsert sender debit row:', sErr);
-        }
-      }
-
-      if (receiverRow) {
-        const { error: rErr } = await supabase.from('transactions').upsert(receiverRow, { onConflict: 'id' });
-        if (rErr) {
-          console.warn('[MoneyMatters] Note on receiver credit row upsert:', rErr);
-        }
-      }
-
-      return senderSynced || rowsToUpsert.length === 1;
+      const fbResult = await firebaseStorageService.syncOfflineTransactionPair(senderDebitTx, receiverCreditTx);
+      return fbResult;
     } catch (err) {
-      console.error('[MoneyMatters] syncOfflineTransactionPair exception:', err);
+      console.error('[Firebase] syncOfflineTransactionPair exception:', err);
       return false;
     }
   },

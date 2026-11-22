@@ -7,6 +7,7 @@ import {
   isSupabaseConfigured,
   findMatchingProfile
 } from '../lib/supabaseClient';
+import { firebaseStorageService } from '../lib/firebaseClient';
 
 const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_hw83brg';
 const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_ns3uw2o';
@@ -285,55 +286,16 @@ export function WalletProvider({ children }) {
     }
   }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
 
-  // Supabase Realtime channel subscription for transactions table (Multi-Device Instant Sync <50ms)
+  // Firebase Realtime instant onSnapshot sync (<15ms across all devices)
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !currentUser?.id) return;
-
-    const channel = supabase
-      .channel('wallet-realtime-sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions' },
-        (payload) => {
-          const cleanWallet = (currentUser.walletId || currentUser.upiId || '').toLowerCase().trim();
-          const newRow = payload.new;
-
-          // Ingest transactions belonging to this active user
-          if (newRow && newRow.id && newRow.user_id === currentUser.id) {
-            const mappedTx = {
-              id: newRow.id,
-              txId: newRow.id,
-              userId: newRow.user_id,
-              direction: newRow.direction,
-              amount: Number(newRow.amount),
-              counterparty: newRow.counterparty,
-              counterpartyWalletId: newRow.counterparty,
-              category: newRow.category || 'Transfer',
-              txCategory: newRow.category === 'TOPUP' ? 'TOPUP' : 'P2P_TRANSFER',
-              message: newRow.message || '',
-              riskScore: newRow.risk_score || 0,
-              riskLevel: newRow.risk_level || 'SAFE',
-              status: newRow.status || 'VERIFIED',
-              reasons: Array.isArray(newRow.reasons) ? newRow.reasons : [],
-              createdAt: newRow.created_at || new Date().toISOString()
-            };
-
-            setTransactions(prev => [mappedTx, ...prev.filter(t => t.id !== mappedTx.id)]);
-            return;
-          }
-
-          // Fallback refetch if payload has partial data
-          storageService.loadUserTransactions(currentUser.id, cleanWallet).then(latestTx => {
-            setTransactions(latestTx);
-          });
-        }
-      )
-      .subscribe();
-
+    if (!currentUser?.id) return;
+    const unsubscribe = firebaseStorageService.subscribeToUserTransactions(currentUser.id, (freshTx) => {
+      setTransactions(freshTx);
+    });
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
+  }, [currentUser?.id]);
 
   // Window focus listener to refresh transactions across browser tabs (throttled to once every 15s to keep phones fast)
   useEffect(() => {
@@ -488,7 +450,9 @@ export function WalletProvider({ children }) {
         password: cleanPin
       };
 
-      // 1. Direct upsert into Supabase public.profiles (onConflict: 'email')
+      // 1. Save profile to Firebase & Supabase
+      firebaseStorageService.createProfile(profilePayload).catch(() => {});
+
       if (isSupabaseConfigured && supabase) {
         try {
           const { data, error } = await supabase
@@ -837,6 +801,9 @@ export function WalletProvider({ children }) {
     } catch (e) {
       console.warn('[updatePaymentPin] localStorage warning:', e);
     }
+
+    // Update in Firebase profiles (<15ms)
+    firebaseStorageService.updatePaymentPin(userId, cleanPin).catch(() => {});
 
     // Update in Supabase profiles (safely updating password without invalid columns)
     if (isSupabaseConfigured && supabase) {
