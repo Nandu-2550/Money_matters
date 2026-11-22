@@ -448,13 +448,10 @@ export const storageService = {
     // 1. Try Supabase
     if (this.isCloudConnected() && supabase) {
       try {
-        let query = supabase.from('transactions').select('*');
-        const cleanWallet = (userWalletId || '').toLowerCase().trim();
-        if (cleanWallet) {
-          query = query.or(`user_id.eq.${userId},counterparty.ilike.%${cleanWallet}%`);
-        } else {
-          query = query.eq('user_id', userId);
-        }
+        const query = supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', userId);
 
         const { data, error } = await query.order('created_at', { ascending: false });
 

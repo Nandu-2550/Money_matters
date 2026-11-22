@@ -298,33 +298,28 @@ export function WalletProvider({ children }) {
           const cleanWallet = (currentUser.walletId || currentUser.upiId || '').toLowerCase().trim();
           const newRow = payload.new;
 
-          // Ultra-fast in-memory apply (<10ms) without waiting for slow HTTP select query
-          if (newRow && newRow.id) {
-            const matchesUser = newRow.user_id === currentUser.id;
-            const matchesCounterparty = cleanWallet && (newRow.counterparty || '').toLowerCase().includes(cleanWallet);
+          // Ingest transactions belonging to this active user
+          if (newRow && newRow.id && newRow.user_id === currentUser.id) {
+            const mappedTx = {
+              id: newRow.id,
+              txId: newRow.id,
+              userId: newRow.user_id,
+              direction: newRow.direction,
+              amount: Number(newRow.amount),
+              counterparty: newRow.counterparty,
+              counterpartyWalletId: newRow.counterparty,
+              category: newRow.category || 'Transfer',
+              txCategory: newRow.category === 'TOPUP' ? 'TOPUP' : 'P2P_TRANSFER',
+              message: newRow.message || '',
+              riskScore: newRow.risk_score || 0,
+              riskLevel: newRow.risk_level || 'SAFE',
+              status: newRow.status || 'VERIFIED',
+              reasons: Array.isArray(newRow.reasons) ? newRow.reasons : [],
+              createdAt: newRow.created_at || new Date().toISOString()
+            };
 
-            if (matchesUser || matchesCounterparty) {
-              const mappedTx = {
-                id: newRow.id,
-                txId: newRow.id,
-                userId: newRow.user_id,
-                direction: matchesUser ? newRow.direction : (newRow.direction === 'OUT' ? 'IN' : 'OUT'),
-                amount: Number(newRow.amount),
-                counterparty: newRow.counterparty,
-                counterpartyWalletId: newRow.counterparty,
-                category: newRow.category || 'Transfer',
-                txCategory: newRow.category === 'TOPUP' ? 'TOPUP' : 'P2P_TRANSFER',
-                message: newRow.message || '',
-                riskScore: newRow.risk_score || 0,
-                riskLevel: newRow.risk_level || 'SAFE',
-                status: newRow.status || 'VERIFIED',
-                reasons: Array.isArray(newRow.reasons) ? newRow.reasons : [],
-                createdAt: newRow.created_at || new Date().toISOString()
-              };
-
-              setTransactions(prev => [mappedTx, ...prev.filter(t => t.id !== mappedTx.id)]);
-              return;
-            }
+            setTransactions(prev => [mappedTx, ...prev.filter(t => t.id !== mappedTx.id)]);
+            return;
           }
 
           // Fallback refetch if payload has partial data
