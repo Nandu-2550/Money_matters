@@ -843,13 +843,12 @@ export function WalletProvider({ children }) {
       console.warn('[updatePaymentPin] localStorage warning:', e);
     }
 
-    // Update in Supabase profiles
+    // Update in Supabase profiles (safely updating password without invalid columns)
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase
           .from('profiles')
           .update({
-            demo_pin: cleanPin,
             password: cleanPin
           })
           .eq('id', userId);
