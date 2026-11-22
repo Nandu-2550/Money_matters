@@ -24,6 +24,7 @@ export default function Navbar() {
     isSimulatedOffline,
     toggleSimulateOffline,
     offlineOutboxCount,
+    isSyncing,
     syncOfflineOutbox
   } = useWallet();
 
@@ -107,12 +108,13 @@ export default function Navbar() {
                 {offlineOutboxCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => syncOfflineOutbox?.()}
-                    className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer flex items-center gap-1"
+                    onClick={() => !isSyncing && syncOfflineOutbox?.()}
+                    disabled={isSyncing}
+                    className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer flex items-center gap-1 disabled:opacity-60"
                     title={isOnline ? 'Click to sync pending outbox to Supabase' : 'Offline payments queued in outbox'}
                   >
-                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                    <span>Sync ({offlineOutboxCount})</span>
+                    <RefreshCw className={`w-2.5 h-2.5 ${isSyncing ? 'animate-spin text-emerald-400' : ''}`} />
+                    <span>{isSyncing ? (language === 'kn' ? 'ಸಿಂಕ್ ಆಗುತ್ತಿದೆ...' : 'Syncing...') : `Sync (${offlineOutboxCount})`}</span>
                   </button>
                 )}
               </div>

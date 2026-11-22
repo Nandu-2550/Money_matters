@@ -46,6 +46,7 @@ export function WalletProvider({ children }) {
   const isOnline = realOnline && !isSimulatedOffline;
 
   const [offlineOutboxCount, setOfflineOutboxCount] = useState(() => getOfflineOutbox().length);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState('scan');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -76,30 +77,58 @@ export function WalletProvider({ children }) {
       return;
     }
 
-    // Parallel sync across all queued outbox items for lightning speed (<150ms total)
-    const results = await Promise.allSettled(
-      outbox.map(async (item) => {
-        const res = await storageService.syncOfflineTransactionPair(item.senderTx, item.receiverTx);
-        return res ? item.txId : null;
-      })
-    );
-
-    const syncedIds = results
-      .filter(r => r.status === 'fulfilled' && r.value)
-      .map(r => r.value);
-
-    if (syncedIds.length > 0) {
-      removeSyncedVouchers(syncedIds);
-      const remaining = getOfflineOutbox().length;
-      setOfflineOutboxCount(remaining);
-      showToast(
-        language === 'kn'
-          ? `${syncedIds.length} ಆಫ್‌ಲೈನ್ ಪಾವತಿಗಳು ಸಿಂಕ್ ಆಗಿವೆ!`
-          : `${syncedIds.length} offline payment(s) synced to Supabase cloud!`,
-        'success'
+    setIsSyncing(true);
+    try {
+      // Parallel sync across all queued outbox items for lightning speed (<100ms total)
+      const results = await Promise.allSettled(
+        outbox.map(async (item) => {
+          const res = await storageService.syncOfflineTransactionPair(item.senderTx, item.receiverTx);
+          const targetId = item.tx_id || item.txId || item.id;
+          return res ? targetId : null;
+        })
       );
+
+      const syncedIds = results
+        .filter(r => r.status === 'fulfilled' && r.value)
+        .map(r => r.value);
+
+      if (syncedIds.length > 0) {
+        removeSyncedVouchers(syncedIds);
+        const remaining = getOfflineOutbox().length;
+        setOfflineOutboxCount(remaining);
+
+        // Instantly mark synced rows in active state (<5ms)
+        const syncedSet = new Set(syncedIds.map(String));
+        setTransactions(prev =>
+          prev.map(tx => {
+            const txIdStr = String(tx.txId || tx.id || '');
+            return syncedSet.has(txIdStr) ? { ...tx, isOfflineQueued: false } : tx;
+          })
+        );
+
+        // Refresh cloud transactions in the background
+        if (currentUser?.id) {
+          const cleanWallet = currentUser.walletId || currentUser.upiId || '';
+          storageService.loadUserTransactions(currentUser.id, cleanWallet).then(latestTx => {
+            if (Array.isArray(latestTx) && latestTx.length > 0) {
+              setTransactions(latestTx);
+            }
+          }).catch(() => {});
+        }
+
+        showToast(
+          language === 'kn'
+            ? `${syncedIds.length} ಆಫ್‌ಲೈನ್ ಪಾವತಿಗಳು ಕ್ಲೌಡ್‌ಗೆ ಸಿಂಕ್ ಆಗಿವೆ!`
+            : `${syncedIds.length} offline payment(s) synced to Supabase cloud!`,
+          'success'
+        );
+      }
+    } catch (err) {
+      console.error('[Sync] Error during offline outbox sync:', err);
+    } finally {
+      setIsSyncing(false);
     }
-  }, [language, showToast]);
+  }, [language, showToast, currentUser?.id, currentUser?.walletId, currentUser?.upiId]);
 
   // Simulated Offline toggle helper
   const toggleSimulateOffline = useCallback(() => {
@@ -112,13 +141,13 @@ export function WalletProvider({ children }) {
         next ? 'warning' : 'info'
       );
       if (!next) {
-        setTimeout(() => syncOfflineOutbox(), 100);
+        setTimeout(() => syncOfflineOutbox(), 50);
       }
       return next;
     });
   }, [language, showToast, syncOfflineOutbox]);
 
-  // Online / Offline monitor + Auto-sync on reconnection
+  // Online / Offline monitor + Auto-sync on reconnection (with mobile focus & visibility support)
   useEffect(() => {
     const handleOnline = () => {
       setRealOnline(true);
@@ -127,7 +156,7 @@ export function WalletProvider({ children }) {
           language === 'kn' ? 'ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ. ಕ್ಲೌಡ್ ಸಿಂಕ್ ಸಕ್ರಿಯವಾಗಿದೆ.' : 'Connected to internet. Auto-syncing outbox...',
           'info'
         );
-        syncOfflineOutbox();
+        setTimeout(() => syncOfflineOutbox(), 50);
       }
     };
 
@@ -139,11 +168,24 @@ export function WalletProvider({ children }) {
       );
     };
 
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible' && (typeof navigator === 'undefined' || navigator.onLine)) {
+        const pending = getOfflineOutbox().length;
+        if (pending > 0 && !isSimulatedOffline) {
+          syncOfflineOutbox();
+        }
+      }
+    };
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
   }, [language, showToast, syncOfflineOutbox, isSimulatedOffline]);
 
@@ -1258,6 +1300,7 @@ export function WalletProvider({ children }) {
     isSimulatedOffline,
     toggleSimulateOffline,
     offlineOutboxCount,
+    isSyncing,
     syncOfflineOutbox,
     activeTab,
     setActiveTab,

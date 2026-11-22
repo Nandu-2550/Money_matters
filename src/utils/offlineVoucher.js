@@ -203,10 +203,16 @@ export function saveOfflineOutbox(items) {
 
 export function queueOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
   const outbox = getOfflineOutbox();
-  const txIdentifier = senderDebitTx.tx_id || senderDebitTx.txId || senderDebitTx.id;
-  const filtered = outbox.filter(item => item.tx_id !== txIdentifier);
+  const txIdentifier = String(senderDebitTx.tx_id || senderDebitTx.txId || senderDebitTx.id || Date.now());
+  const filtered = outbox.filter(item => 
+    String(item.tx_id || '') !== txIdentifier && 
+    String(item.txId || '') !== txIdentifier && 
+    String(item.id || '') !== txIdentifier
+  );
   filtered.push({
+    id: txIdentifier,
     tx_id: txIdentifier,
+    txId: txIdentifier,
     senderTx: senderDebitTx,
     receiverTx: receiverCreditTx,
     queuedAt: new Date().toISOString()
@@ -217,7 +223,11 @@ export function queueOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
 export function removeSyncedVouchers(syncedIds) {
   if (!syncedIds || syncedIds.length === 0) return;
   const outbox = getOfflineOutbox();
-  const idSet = new Set(syncedIds);
-  const remaining = outbox.filter(item => !idSet.has(item.tx_id) && !idSet.has(item.txId));
+  const idSet = new Set(syncedIds.map(String));
+  const remaining = outbox.filter(item => 
+    !idSet.has(String(item.tx_id || '')) && 
+    !idSet.has(String(item.txId || '')) && 
+    !idSet.has(String(item.id || ''))
+  );
   saveOfflineOutbox(remaining);
 }

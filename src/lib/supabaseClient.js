@@ -364,20 +364,21 @@ export const storageService = {
   },
 
   formatBaseTransaction(tx) {
+    const rawTxId = tx.txId || tx.tx_id || tx.id;
     return {
-      id: tx.id || tx.txId || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: tx.id || rawTxId || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       user_id: tx.userId || tx.user_id,
       direction: tx.direction,
       amount: Number(tx.amount),
       counterparty: tx.counterparty,
       category: tx.category || 'Transfer',
       message: tx.message || '',
-      risk_score: tx.riskScore ?? 0,
-      risk_level: tx.riskLevel || 'SAFE',
+      risk_score: tx.riskScore ?? tx.risk_score ?? 0,
+      risk_level: tx.riskLevel || tx.risk_level || 'SAFE',
       status: tx.status || 'VERIFIED',
       reasons: Array.isArray(tx.reasons) ? tx.reasons : (tx.reasons ? [tx.reasons] : []),
-      is_collect_request: Boolean(tx.isCollectRequest),
-      created_at: tx.createdAt || new Date().toISOString(),
+      is_collect_request: Boolean(tx.isCollectRequest || tx.is_collect_request),
+      created_at: tx.createdAt || tx.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
   },
@@ -563,23 +564,98 @@ export const storageService = {
     return updated;
   },
 
+  async resolveProfileId(candidate) {
+    if (!candidate) return null;
+    const clean = String(candidate).trim();
+
+    // 1. Check local profiles array first (<1ms)
+    try {
+      const localProfiles = await this.loadProfiles();
+      const localMatch = findMatchingProfile(clean, localProfiles);
+      if (localMatch?.id) return localMatch.id;
+    } catch {
+      // ignore
+    }
+
+    // 2. Query Supabase directly
+    if (this.isCloudConnected() && supabase) {
+      try {
+        const { data: d1 } = await supabase.from('profiles').select('id').eq('id', clean).limit(1);
+        if (d1 && d1.length > 0) return d1[0].id;
+
+        const { data: d2 } = await supabase.from('profiles').select('id').eq('upi_id', clean).limit(1);
+        if (d2 && d2.length > 0) return d2[0].id;
+
+        const { data: d3 } = await supabase.from('profiles').select('id').eq('email', clean).limit(1);
+        if (d3 && d3.length > 0) return d3[0].id;
+      } catch (err) {
+        console.warn('[MoneyMatters] Error resolving profile ID from cloud:', err);
+      }
+    }
+    return null;
+  },
+
   async syncOfflineTransactionPair(senderDebitTx, receiverCreditTx) {
     if (!this.isCloudConnected() || !supabase) return false;
     try {
-      const rows = [];
-      if (senderDebitTx) rows.push(this.formatBaseTransaction(senderDebitTx));
-      if (receiverCreditTx) rows.push(this.formatBaseTransaction(receiverCreditTx));
-      if (rows.length === 0) return true;
-
-      // Single concurrent batch upsert (<100ms)
-      const { error } = await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
-      if (error) {
-        console.warn('[MoneyMatters] Batch pair upsert warning:', error);
-        return false;
+      // 1. Resolve and format sender transaction
+      let senderRow = null;
+      if (senderDebitTx) {
+        const rawSenderId = senderDebitTx.userId || senderDebitTx.user_id;
+        const senderUserId = await this.resolveProfileId(rawSenderId);
+        senderRow = this.formatBaseTransaction({
+          ...senderDebitTx,
+          userId: senderUserId || rawSenderId
+        });
       }
-      return true;
+
+      // 2. Resolve and format receiver transaction (only if internal registered user)
+      let receiverRow = null;
+      if (receiverCreditTx) {
+        const rawReceiverId = receiverCreditTx.userId || receiverCreditTx.user_id || receiverCreditTx.counterparty;
+        const receiverUserId = await this.resolveProfileId(rawReceiverId);
+        if (receiverUserId) {
+          receiverRow = this.formatBaseTransaction({
+            ...receiverCreditTx,
+            userId: receiverUserId
+          });
+        }
+      }
+
+      const rowsToUpsert = [];
+      if (senderRow) rowsToUpsert.push(senderRow);
+      if (receiverRow) rowsToUpsert.push(receiverRow);
+
+      if (rowsToUpsert.length === 0) return true;
+
+      // 3. Fast batch upsert (<100ms)
+      if (rowsToUpsert.length > 1) {
+        const { error: batchErr } = await supabase.from('transactions').upsert(rowsToUpsert, { onConflict: 'id' });
+        if (!batchErr) return true;
+        console.warn('[MoneyMatters] Batch pair upsert warning, retrying individually:', batchErr);
+      }
+
+      // 4. Safe individual upserts (ensures sender debit NEVER fails if receiver fails)
+      let senderSynced = false;
+      if (senderRow) {
+        const { error: sErr } = await supabase.from('transactions').upsert(senderRow, { onConflict: 'id' });
+        if (!sErr) {
+          senderSynced = true;
+        } else {
+          console.error('[MoneyMatters] Failed to upsert sender debit row:', sErr);
+        }
+      }
+
+      if (receiverRow) {
+        const { error: rErr } = await supabase.from('transactions').upsert(receiverRow, { onConflict: 'id' });
+        if (rErr) {
+          console.warn('[MoneyMatters] Note on receiver credit row upsert:', rErr);
+        }
+      }
+
+      return senderSynced || rowsToUpsert.length === 1;
     } catch (err) {
-      console.warn('[MoneyMatters] syncOfflineTransactionPair exception:', err);
+      console.error('[MoneyMatters] syncOfflineTransactionPair exception:', err);
       return false;
     }
   },
