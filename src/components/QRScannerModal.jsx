@@ -39,6 +39,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
   const isStartingRef = useRef(false);
+  const isProcessingRef = useRef(false);
 
   const onScanSuccessRef = useRef(onScanSuccess);
   onScanSuccessRef.current = onScanSuccess;
@@ -143,8 +144,14 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
 
   // Handle Scanning Result (Offline Voucher QR or Standard Payee QR)
   const handlePayloadResult = useCallback(async (rawText) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
     setScanError('');
-    if (!rawText || typeof rawText !== 'string') return;
+
+    if (!rawText || typeof rawText !== 'string') {
+      isProcessingRef.current = false;
+      return;
+    }
     let trimmed = rawText.trim();
 
     // 1. Unwrap outer quotes or escaped JSON strings if present
@@ -170,9 +177,10 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           voucherText = voucherText.substring(firstBrace, lastBrace + 1);
         }
 
-        // 1. Cryptographic HMAC Signature Verification
+        // 1. Cryptographic HMAC Signature Verification (<1ms with cached key)
         const verification = await verifyOfflineVoucher(voucherText);
         if (!verification?.valid || !verification?.voucher) {
+          isProcessingRef.current = false;
           setScanError(
             language === 'kn'
               ? 'ವೋಚರ್ ಸಹಿ ಪರಿಶೀಲನೆ ವಿಫಲವಾಗಿದೆ! ಇದು ತಿದ್ದುಪಡಿ ಮಾಡಲಾದ ಅಥವಾ ನಕಲಿ ವೋಚರ್ ಆಗಿದೆ.'
@@ -207,6 +215,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           targetWallet === 'mysafewallet';
 
         if (!isAddressedToMe) {
+          isProcessingRef.current = false;
           setScanError(
             language === 'kn'
               ? `ಈ ಪಾವತಿ ವೋಚರ್ [${voucher.to_wallet}] ಗೆ ಉದ್ದೇಶಿಸಲಾಗಿದೆ. ನಿಮ್ಮ ಸಕ್ರಿಯ ವಾಲೆಟ್ [${myWalletId}] ಆಗಿದೆ. ಸ್ವೀಕರಿಸಲು ಸರಿಯಾದ ಖಾತೆಗೆ ಬದಲಾಯಿಸಿ.`
@@ -219,6 +228,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
         const alreadyClaimedLocal = isVoucherClaimed(voucher.tx_id);
         const alreadyClaimedInTx = transactions.some(t => (t.txId === voucher.tx_id || t.id === voucher.tx_id));
         if (alreadyClaimedLocal || alreadyClaimedInTx) {
+          isProcessingRef.current = false;
           setScanError(
             language === 'kn'
               ? `ಈ ಪಾವತಿ ವೋಚರ್ (ID: ${voucher.tx_id}) ಈಗಾಗಲೇ ಬಳಸಲಾಗಿದೆ! ಪುನರಾವರ್ತನೆ ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ.`
@@ -227,12 +237,8 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           return;
         }
 
-        // 4. Success! Claim the voucher and credit recipient balance
-        await stopCamera();
-        if (onClaimVoucherRef.current) {
-          await onClaimVoucherRef.current(voucher);
-        }
-
+        // 4. Instant Feedback! Show success screen immediately, tear down camera in background
+        stopCamera().catch(() => {});
         setClaimSuccessData({
           amount: voucher.amount,
           from: voucher.from_wallet,
@@ -240,8 +246,15 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
           txId: voucher.tx_id,
           timestamp: new Date(voucher.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
+
+        if (onClaimVoucherRef.current) {
+          onClaimVoucherRef.current(voucher).catch(err => {
+            console.warn('[QRScanner] onClaimVoucher warning:', err);
+          });
+        }
         return;
       } catch (err) {
+        isProcessingRef.current = false;
         setScanError(
           language === 'kn'
             ? 'ಅಮಾನ್ಯ ವೋಚರ್ ಡೇಟಾ. ಮಾನ್ಯವಾದ ಸಹಿ ಮಾಡಿದ ಆಫ್‌ಲೈನ್ ಪಾವತಿ QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.'
@@ -257,6 +270,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     const parsed = parseWalletUri(trimmed);
 
     if (!parsed || !parsed.walletId) {
+      isProcessingRef.current = false;
       setScanError(
         language === 'kn'
           ? 'ಅಮಾನ್ಯವಾದ QR ಕೋಡ್! ಮಾನ್ಯವಾದ ವಾಲೆಟ್ ಅಥವಾ UPI QR ಕೋಡ್ ಅನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.'
@@ -276,8 +290,8 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
     const finalName = matchedProfile ? (matchedProfile.fullName || matchedProfile.full_name) : (parsed.payeeName || parsed.walletId);
     const finalHandle = matchedProfile ? (matchedProfile.walletId || matchedProfile.upiId || matchedProfile.wallet_id) : parsed.walletId;
 
-    // Success! Stop camera if running, then trigger callback
-    await stopCamera();
+    // Success! Stop camera in background and trigger callback immediately
+    stopCamera().catch(() => {});
     if (onScanSuccessRef.current) {
       onScanSuccessRef.current({
         upiId: finalHandle,
@@ -292,12 +306,13 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
   const handlePayloadResultRef = useRef(handlePayloadResult);
   handlePayloadResultRef.current = handlePayloadResult;
 
-  // Start Live Camera
+  // Start Live Camera (Hardware Accelerated with native BarcodeDetector)
   const startCamera = useCallback(async () => {
     if (isStartingRef.current) return;
     isStartingRef.current = true;
     setCameraError('');
     setScanError('');
+    isProcessingRef.current = false;
 
     try {
       await stopCamera();
@@ -305,7 +320,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
       // Check if container element exists in DOM
       let elem = document.getElementById('qr-camera-element');
       if (!elem) {
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 60));
         elem = document.getElementById('qr-camera-element');
       }
       if (!elem) {
@@ -313,51 +328,51 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
         return;
       }
 
-      const html5QrCode = new Html5Qrcode('qr-camera-element');
+      // Initialize with hardware BarcodeDetector acceleration enabled
+      const html5QrCode = new Html5Qrcode('qr-camera-element', {
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        },
+        verbose: false
+      });
       scannerRef.current = html5QrCode;
 
-      let cameraConfig = { facingMode: 'environment' };
-      try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          const backCam = devices.find(d => /back|rear|environment/i.test(d.label));
-          cameraConfig = backCam ? backCam.id : devices[0].id;
-        }
-      } catch (camErr) {
-        console.warn('[QRScanner] Camera enumeration note:', camErr);
-      }
-
       const qrConfig = {
-        fps: 15,
+        fps: 25,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const size = Math.floor(minEdge * 0.75);
+          const size = Math.floor(minEdge * 0.85);
           return {
-            width: Math.max(size, 180),
-            height: Math.max(size, 180)
+            width: Math.max(size, 200),
+            height: Math.max(size, 200)
           };
         },
-        aspectRatio: 1.0
+        aspectRatio: 1.0,
+        videoConstraints: {
+          facingMode: 'environment',
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        }
       };
 
       try {
         await html5QrCode.start(
-          cameraConfig,
+          { facingMode: 'environment' },
           qrConfig,
           (decodedText) => {
+            if (isProcessingRef.current) return;
             handlePayloadResultRef.current?.(decodedText);
           },
-          () => {
-            // normal frame scan misses ignored
-          }
+          () => {}
         );
         setCameraActive(true);
       } catch (startErr) {
-        console.warn('[QRScanner] Failed rear camera start, trying generic camera:', startErr);
+        console.warn('[QRScanner] Direct rear camera start note, trying user camera:', startErr);
         await html5QrCode.start(
           { facingMode: 'user' },
           qrConfig,
           (decodedText) => {
+            if (isProcessingRef.current) return;
             handlePayloadResultRef.current?.(decodedText);
           },
           () => {}
@@ -426,6 +441,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess, onClaim
 
   // Close handler
   const handleModalClose = () => {
+    isProcessingRef.current = false;
     stopCamera();
     setClaimSuccessData(null);
     setScanError('');

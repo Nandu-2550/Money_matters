@@ -24,18 +24,34 @@ function strToBuffer(str) {
   return new TextEncoder().encode(str);
 }
 
-// Simple fallback HMAC-SHA256 for non-crypto environments (e.g. non-HTTPS local IP)
-async function computeHmacSha256(message, secret) {
-  try {
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+// Cached CryptoKey for ultra-fast microsecond HMAC execution
+let cachedCryptoKey = null;
+
+async function getHmacCryptoKey(secret) {
+  if (cachedCryptoKey) return cachedCryptoKey;
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    try {
       const keyData = strToBuffer(secret);
-      const cryptoKey = await window.crypto.subtle.importKey(
+      cachedCryptoKey = await window.crypto.subtle.importKey(
         'raw',
         keyData,
         { name: 'HMAC', hash: { name: 'SHA-256' } },
         false,
         ['sign']
       );
+      return cachedCryptoKey;
+    } catch (err) {
+      console.warn('[OfflineVoucher] WebCrypto importKey error:', err);
+    }
+  }
+  return null;
+}
+
+// Simple fallback HMAC-SHA256 for non-crypto environments (e.g. non-HTTPS local IP)
+async function computeHmacSha256(message, secret) {
+  try {
+    const cryptoKey = await getHmacCryptoKey(secret);
+    if (cryptoKey && window.crypto && window.crypto.subtle) {
       const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, strToBuffer(message));
       return bufferToHex(signature);
     }
@@ -92,10 +108,13 @@ export async function signOfflineVoucher({
     to_name: to_name || normalizedTo,
     amount: cleanAmount,
     timestamp,
-    note: note || 'Offline Safe-Wallet Transfer',
     sig,
     signature: sig
   };
+
+  if (note && note.trim()) {
+    voucherObj.note = note.trim();
+  }
 
   // Return standard JSON string
   return JSON.stringify(voucherObj);
@@ -137,8 +156,8 @@ export async function verifyOfflineVoucher(rawInput) {
     return { valid: false, reason: 'Invalid or missing voucher amount.' };
   }
 
-  const normalizedFrom = (voucher.from_wallet || '').trim().toLowerCase();
-  const normalizedTo = (voucher.to_wallet || '').trim().toLowerCase();
+  const normalizedFrom = (voucher.from_wallet || voucher.from || '').trim().toLowerCase();
+  const normalizedTo = (voucher.to_wallet || voucher.to || '').trim().toLowerCase();
   const formattedAmount = cleanAmount.toFixed(2);
 
   const canonicalToVerify = `${voucher.tx_id}|${normalizedFrom}|${normalizedTo}|${formattedAmount}|${voucher.timestamp}`;
@@ -150,6 +169,11 @@ export async function verifyOfflineVoucher(rawInput) {
       reason: 'Invalid or tampered offline voucher signature'
     };
   }
+
+  // Ensure normalized properties are present
+  voucher.from_wallet = normalizedFrom;
+  voucher.to_wallet = normalizedTo;
+  voucher.signature = sigToVerify;
 
   return { valid: true, voucher };
 }

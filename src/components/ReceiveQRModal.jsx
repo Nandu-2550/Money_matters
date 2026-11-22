@@ -91,8 +91,8 @@ export default function ReceiveQRModal({ isOpen, onClose }) {
         <div className="bg-white p-4 rounded-3xl shadow-lg flex flex-col items-center justify-center mx-auto w-fit" ref={qrRef}>
           <QRCodeCanvas
             value={walletUri}
-            size={190}
-            level="H"
+            size={200}
+            level="M"
             includeMargin={true}
           />
           <div className="text-center mt-1">

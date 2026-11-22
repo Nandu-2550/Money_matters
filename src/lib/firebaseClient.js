@@ -1,14 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
   onSnapshot,
   writeBatch
 } from 'firebase/firestore';
@@ -199,11 +199,11 @@ export const firebaseStorageService = {
       console.warn('[Firebase] local cache write error:', e);
     }
 
-    // Write to Firebase
-    try {
-      await setDoc(doc(db, 'transactions', docId), row, { merge: true });
-    } catch (err) {
-      console.warn('[Firebase] saveNewTransaction cloud write deferred:', err);
+    // Write to Firebase in background if online (never block local caller or offline operations)
+    if (this.isCloudConnected() && typeof navigator !== 'undefined' && navigator.onLine !== false) {
+      setDoc(doc(db, 'transactions', docId), row, { merge: true }).catch(err => {
+        console.warn('[Firebase] saveNewTransaction cloud write deferred:', err);
+      });
     }
     return row;
   },
@@ -260,7 +260,7 @@ export const firebaseStorageService = {
   },
 
   subscribeToUserTransactions(userId, onUpdate) {
-    if (!userId) return () => {};
+    if (!userId) return () => { };
     const q = query(
       collection(db, 'transactions'),
       where('user_id', '==', userId)

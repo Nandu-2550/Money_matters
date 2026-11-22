@@ -42,6 +42,21 @@ export default function OfflineVoucherModal({ isOpen, onClose, voucher }) {
     voucherJsonString = JSON.stringify(voucherObj);
   }
 
+  // Keep QR payload compact and canonical for ultra-fast camera detection
+  const compactPayload = {
+    v: 1,
+    type: 'MM_VOUCHER',
+    tx_id: voucherObj.tx_id,
+    from_wallet: voucherObj.from_wallet || voucherObj.from,
+    from_name: voucherObj.from_name || voucherObj.from_wallet,
+    to_wallet: voucherObj.to_wallet || voucherObj.to,
+    to_name: voucherObj.to_name || voucherObj.to_wallet,
+    amount: Number(voucherObj.amount),
+    timestamp: voucherObj.timestamp,
+    sig: voucherObj.sig || voucherObj.signature
+  };
+  const scannableJsonString = JSON.stringify(compactPayload);
+
   const handleCopyCode = () => {
     navigator.clipboard.writeText(voucherJsonString);
     setCopied(true);
@@ -130,15 +145,15 @@ export default function OfflineVoucherModal({ isOpen, onClose, voucher }) {
           </div>
         </div>
 
-        {/* Scannable Signed QR Code Canvas (size=230, level="M", includeMargin=true) */}
+        {/* Scannable Signed QR Code Canvas (High Contrast, Large Blocks, Level L) */}
         <div 
           ref={canvasContainerRef}
-          className="bg-white p-3 rounded-2xl shadow-xl flex flex-col items-center justify-center mx-auto w-fit"
+          className="bg-white p-3.5 rounded-2xl shadow-xl flex flex-col items-center justify-center mx-auto w-fit"
         >
           <QRCodeCanvas
-            value={voucherJsonString}
-            size={230}
-            level="M"
+            value={scannableJsonString}
+            size={245}
+            level="L"
             includeMargin={true}
           />
           <div className="text-center mt-1">

@@ -938,17 +938,15 @@ export function WalletProvider({ children }) {
       await storageService.saveNewTransaction(senderTx);
     }
 
-    // Attempt cloud settlement if online
+    // Attempt cloud settlement if online (in background without blocking UI)
     if (isOnline) {
-      try {
-        await storageService.syncOfflineTransactionPair(senderTx, receiverTx);
-      } catch (err) {
-        console.warn('[Claim] Online sync error, queuing in outbox:', err);
+      storageService.syncOfflineTransactionPair(senderTx, receiverTx).catch(err => {
+        console.warn('[Claim] Online sync note, queuing in outbox:', err);
         queueOfflineTransactionPair(senderTx, receiverTx);
         setOfflineOutboxCount(getOfflineOutbox().length);
-      }
+      });
     } else {
-      // Queue for eventual settlement
+      // Offline: queue in outbox immediately for eventual settlement
       queueOfflineTransactionPair(senderTx, receiverTx);
       setOfflineOutboxCount(getOfflineOutbox().length);
     }
